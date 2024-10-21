@@ -1,6 +1,6 @@
 import dataclasses
 import datetime
-from typing import Any, Final, Union, final, overload
+from typing import Any, Final, Union, cast, final, overload
 
 
 @final
@@ -32,9 +32,9 @@ class Timestamp:
     def now() -> "Timestamp":
         return Timestamp.from_datetime(datetime.datetime.now(tz=datetime.timezone.utc))
 
-    EPOCH: Final["Timestamp"] = ...
-    MIN: Final["Timestamp"] = ...
-    MAX: Final["Timestamp"] = ...
+    EPOCH: Final["Timestamp"] = cast("Timestamp", ...)
+    MIN: Final["Timestamp"] = cast("Timestamp", ...)
+    MAX: Final["Timestamp"] = cast("Timestamp", ...)
 
     @property
     def unix_seconds(self) -> float:
