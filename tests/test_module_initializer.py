@@ -753,3 +753,4 @@ class ModuleInitializerTestCase(unittest.TestCase):
         points = shape.mutable_points
         self.assertIsInstance(points, list)
         self.assertIs(shape.mutable_points, points)
+        self.assertEqual(2, 3)
