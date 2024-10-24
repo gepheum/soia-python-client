@@ -1,10 +1,9 @@
-import io
 import json as jsonlib
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 from typing import Any, Generic, TypeVar, cast, final
 
-from soialib.impl.function_maker import BodyBuilder, Expr, LineSpan, make_function
+from soialib.impl.function_maker import Expr, LineSpan, make_function
 from soialib.impl.type_adapter import TypeAdapter
 from soialib.never import Never
 
