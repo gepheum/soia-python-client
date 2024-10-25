@@ -107,11 +107,6 @@ Record = Union[Struct, Enum]
 
 
 @dataclass(frozen=True)
-class Module:
-    records: tuple[Record, ...] = ()
-
-
-@dataclass(frozen=True)
 class RecordId:
     record_id: str
     module_path: str

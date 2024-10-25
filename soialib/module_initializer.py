@@ -11,8 +11,8 @@ RecordAdapter = Union[structs.StructAdapter, enums.EnumAdapter]
 _record_id_to_adapter: dict[str, RecordAdapter] = {}
 
 
-def init_module(
-    module: spec.Module,
+def init_module_classes(
+    records: tuple[spec.Record, ...],
     globals: dict[str, Any],
     # For testing
     record_id_to_adapter: dict[str, RecordAdapter] = _record_id_to_adapter,
@@ -49,7 +49,7 @@ def init_module(
             return record_id_to_adapter[type]
 
     module_adapters: list[RecordAdapter] = []
-    for record in module.records:
+    for record in records:
         if record.id in record_id_to_adapter:
             raise AssertionError(record.id)
         adapter: RecordAdapter
