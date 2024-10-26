@@ -24,7 +24,7 @@ class ArrayType:
 
 @dataclass(frozen=True)
 class OptionalType:
-    value: "Type"
+    other: "Type"
 
 
 # TODO: comment

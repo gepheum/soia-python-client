@@ -43,7 +43,7 @@ def init_module_classes(
                 type.key_attributes,
             )
         elif isinstance(type, spec.OptionalType):
-            return optionals.get_optional_adapter(resolve_type(type.value))
+            return optionals.get_optional_adapter(resolve_type(type.other))
         elif isinstance(type, str):
             # A record id.
             return record_id_to_adapter[type]
