@@ -1,6 +1,6 @@
 from typing import Any, Union
 
-from soialib import spec
+from soialib import method, spec
 from soialib.impl import arrays, enums, optionals, primitives, structs
 from soialib.impl.type_adapter import TypeAdapter
 from soialib.serializer import make_serializer
@@ -11,8 +11,10 @@ RecordAdapter = Union[structs.StructAdapter, enums.EnumAdapter]
 _record_id_to_adapter: dict[str, RecordAdapter] = {}
 
 
-def init_module_classes(
+def init_module(
     records: tuple[spec.Record, ...],
+    methods: tuple[spec.Method, ...],
+    constants: tuple[spec.Constant, ...],
     globals: dict[str, Any],
     # For testing
     record_id_to_adapter: dict[str, RecordAdapter] = _record_id_to_adapter,
@@ -77,3 +79,22 @@ def init_module_classes(
             gen_class._parent_class = None
         # TODO: comment
         gen_class.SERIALIZER = make_serializer(adapter)
+
+    # Now that al the classes have been initialized, create the methods.
+    for method_spec in methods:
+        var_name = method_spec._var_name or method_spec.name
+        request_serializer = make_serializer(resolve_type(method_spec.request_type))
+        response_serializer = make_serializer(resolve_type(method_spec.response_type))
+        globals[var_name] = method.Method(
+            name=method_spec.name,
+            number=method_spec.number,
+            request_serializer=request_serializer,
+            response_serializer=response_serializer,
+        )
+        del var_name, request_serializer, response_serializer
+
+    # Create the constants.
+    for constant in constants:
+        serializer = make_serializer(resolve_type(constant.type))
+        globals[constant.name] = serializer.from_json_code(constant.json_code)
+        del serializer

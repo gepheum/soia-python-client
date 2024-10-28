@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TypeVar
-from weakref import WeakKeyDictionary
+from weakref import WeakValueDictionary
 
 from soialib import spec
 from soialib.impl.encoding import NULL_WIRE
@@ -69,6 +69,6 @@ class _OptionalAdapter(TypeAdapter):
         self.other_adapter.finalize(resolve_type_fn)
 
 
-_other_adapter_to_optional_adapter: WeakKeyDictionary[TypeAdapter, TypeAdapter] = (
-    WeakKeyDictionary()
+_other_adapter_to_optional_adapter: WeakValueDictionary[TypeAdapter, TypeAdapter] = (
+    WeakValueDictionary()
 )

@@ -141,3 +141,19 @@ class RecordId:
             qualname=parent_qualname,
             name_parts=parent_name_parts,
         )
+
+
+@dataclass(frozen=True)
+class Method:
+    name: str
+    number: int
+    request_type: Type
+    response_type: Type
+    _var_name: str = ""  # If different from 'name'
+
+
+@dataclass(frozen=True)
+class Constant:
+    name: str
+    type: Type
+    json_code: str

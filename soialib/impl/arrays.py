@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 from typing import Generic, Optional
-from weakref import WeakKeyDictionary
+from weakref import WeakValueDictionary
 
 from soialib import spec
 from soialib.impl.function_maker import Any, Expr, ExprLike, Line, make_function
@@ -19,8 +19,9 @@ def get_array_adapter(
     else:
         listuple_class = _new_listuple_class()
     array_adapter = _ArrayAdapter(item_adapter, listuple_class)
-    key_spec_to_array_adapter = _item_to_array_adapters.setdefault(item_adapter, {})
-    return key_spec_to_array_adapter.setdefault(key_attributes, array_adapter)
+    return _item_to_array_adapter.setdefault(
+        (item_adapter, key_attributes), array_adapter
+    )
 
 
 class _ArrayAdapter(TypeAdapter):
@@ -107,10 +108,10 @@ class _ArrayAdapter(TypeAdapter):
         self.item_adapter.finalize(resolve_type_fn)
 
 
-_KeyAttributesToArrayAdapter = dict[tuple[str, ...], _ArrayAdapter]
-_ItemToArrayAdapters = WeakKeyDictionary[TypeAdapter, _KeyAttributesToArrayAdapter]
+_ItemAndKeyAttributes = tuple[TypeAdapter, tuple[str, ...]]
+_ItemToArrayAdapter = WeakValueDictionary[_ItemAndKeyAttributes, _ArrayAdapter]
 
-_item_to_array_adapters: _ItemToArrayAdapters = WeakKeyDictionary()
+_item_to_array_adapter: _ItemToArrayAdapter = WeakValueDictionary()
 
 
 def _new_listuple_class() -> type:

@@ -2,6 +2,7 @@ import json as jsonlib
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 from typing import Any, Generic, TypeVar, cast, final
+from weakref import WeakValueDictionary
 
 from soialib.impl.function_maker import Expr, LineSpan, make_function
 from soialib.impl.type_adapter import TypeAdapter
@@ -13,17 +14,21 @@ T = TypeVar("T")
 @final
 class Serializer(Generic[T]):
     __slots__ = (
+        "__weakref__",
+        "_adapter",
         "_to_dense_json_fn",
         "_to_readable_json_fn",
         "_from_json_fn",
     )
 
+    _adapter: TypeAdapter
     _to_dense_json_fn: Callable[[T], Any]
     _to_readable_json_fn: Callable[[T], Any]
     _from_json_fn: Callable[[Any], T]
 
     def __init__(self, adapter: Never):
         # Use Never (^) as a trick to make the constructor internal.
+        object.__setattr__(self, "_adapter", adapter)
         object.__setattr__(
             self, "_to_dense_json_fn", _make_to_json_fn(adapter, readable=False)
         )
@@ -56,8 +61,16 @@ class Serializer(Generic[T]):
         raise FrozenInstanceError(self.__class__.__qualname__)
 
 
+# A cache to make sure we only create one Serializer for each TypeAdapter.
+_type_adapter_to_serializer: WeakValueDictionary[TypeAdapter, Serializer] = (
+    WeakValueDictionary()
+)
+
+
 def make_serializer(adapter: TypeAdapter) -> Serializer:
-    return Serializer(cast(Never, adapter))
+    return _type_adapter_to_serializer.setdefault(
+        adapter, Serializer(cast(Never, adapter))
+    )
 
 
 def _make_to_json_fn(adapter: TypeAdapter, readable: bool) -> Callable[[Any], Any]:

@@ -5,15 +5,16 @@ from typing import Any
 
 from soialib import spec
 from soialib.keyed_items import KeyedItems
-from soialib.module_initializer import init_module_classes
+from soialib.method import Method
+from soialib.module_initializer import init_module
 from soialib.timestamp import Timestamp
 
 
 class ModuleInitializerTestCase(unittest.TestCase):
-    def init_test_module_classes(self) -> dict[str, Any]:
+    def init_test_module(self) -> dict[str, Any]:
         globals: dict[str, Any] = {}
-        init_module_classes(
-            (
+        init_module(
+            records=(
                 spec.Struct(
                     id="my/module.soia:Point",
                     fields=(
@@ -259,19 +260,41 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     ),
                 ),
             ),
+            methods=(
+                spec.Method(
+                    name="FirstMethod",
+                    number=-300,
+                    request_type="my/module.soia:Point",
+                    response_type="my/module.soia:Shape",
+                ),
+                spec.Method(
+                    name="SecondMethod",
+                    number=-301,
+                    request_type="my/module.soia:Point",
+                    response_type="my/module.soia:Shape",
+                    _var_name="MethodVar",
+                ),
+            ),
+            constants=(
+                spec.Constant(
+                    name="C",
+                    type="my/module.soia:Point",
+                    json_code="[1.5, 2.5]",
+                ),
+            ),
             globals=globals,
             record_id_to_adapter={},
         )
         return globals
 
     def test_struct_getters(self):
-        point_cls = self.init_test_module_classes()["Point"]
+        point_cls = self.init_test_module()["Point"]
         point = point_cls(x=1.5, y=2.5)
         self.assertEqual(point.x, 1.5)
         self.assertEqual(point.y, 2.5)
 
     def test_to_mutable(self):
-        point_cls = self.init_test_module_classes()["Point"]
+        point_cls = self.init_test_module()["Point"]
         point = point_cls(x=1.5, y=2.5)
         mutable = point.to_mutable()
         mutable.x = 4.0
@@ -281,7 +304,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIs(point.to_frozen(), point)
 
     def test_struct_eq(self):
-        point_cls = self.init_test_module_classes()["Point"]
+        point_cls = self.init_test_module()["Point"]
         a = point_cls(x=1.5, y=2.5)
         b = point_cls(x=1.5, y=2.5)
         c = point_cls(x=1.5, y=3.0)
@@ -292,11 +315,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(point_cls(), point_cls(x=0.0, y=0.0))
 
     def test_or_mutable(self):
-        point_cls = self.init_test_module_classes()["Point"]
+        point_cls = self.init_test_module()["Point"]
         point_cls.OrMutable
 
     def test_default_values(self):
-        primitives_cls = self.init_test_module_classes()["Primitives"]
+        primitives_cls = self.init_test_module()["Primitives"]
         a = primitives_cls(
             bool=False,
             bytes=b"",
@@ -311,29 +334,29 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(hash(a), hash(b))
 
     def test_to_dense_json(self):
-        point_cls = self.init_test_module_classes()["Point"]
+        point_cls = self.init_test_module()["Point"]
         point = point_cls(x=1.5, y=2.5)
         json = point_cls.SERIALIZER.to_json(point)
         self.assertEqual(json, [1.5, 2.5])
 
     def test_to_readable_json(self):
-        point_cls = self.init_test_module_classes()["Point"]
+        point_cls = self.init_test_module()["Point"]
         point = point_cls(x=1.5, y=2.5)
         json = point_cls.SERIALIZER.to_json(point, readable_flavor=True)
         self.assertEqual(json, {"x": 1.5, "y": 2.5})
 
     def test_from_dense_json(self):
-        point_cls = self.init_test_module_classes()["Point"]
+        point_cls = self.init_test_module()["Point"]
         point = point_cls.SERIALIZER.from_json([1.5, 2.5])
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
 
     def test_from_readable_json(self):
-        point_cls = self.init_test_module_classes()["Point"]
+        point_cls = self.init_test_module()["Point"]
         point = point_cls.SERIALIZER.from_json({"x": 1.5, "y": 2.5})
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
 
     def test_struct_ctor_accepts_mutable_struct(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         segment_cls = module["Segment"]
         point_cls = module["Point"]
         segment = segment_cls(
@@ -350,7 +373,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
     def test_struct_ctor_checks_type_of_struct_param(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         segment_cls = module["Segment"]
         try:
             segment_cls(
@@ -362,11 +385,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
             self.assertIn("Point", str(e))
 
     def test_struct_ctor_raises_error_if_unknown_arg(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         segment_cls = module["Segment"]
 
     def test_to_frozen_checks_type_of_struct_field(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         segment_cls = module["Segment"]
         mutable = segment_cls.Mutable()
         mutable.a = segment_cls.DEFAULT  # Should be a Point
@@ -377,7 +400,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
             self.assertIn("Point", str(e))
 
     def test_struct_ctor_accepts_mutable_list(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         shape_cls = module["Shape"]
         point_cls = module["Point"]
         shape = shape_cls(
@@ -397,7 +420,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
     def test_listuple_not_copied(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         shape_cls = module["Shape"]
         point_cls = module["Point"]
         shape = shape_cls(
@@ -412,7 +435,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIsNot(other_shape.points.__class__, tuple)
 
     def test_single_empty_listuple_instance(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         shape_cls = module["Shape"]
         shape = shape_cls(
             points=[],
@@ -422,7 +445,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIsNot(shape.points, ())
 
     def test_optional(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         segment_cls = module["Segment"]
         point_cls = module["Point"]
         segment = segment_cls(
@@ -437,7 +460,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
     def test_enum_unknown_constant(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         primary_color_cls = module["PrimaryColor"]
         unknown = primary_color_cls.UNKNOWN
         self.assertEqual(unknown.kind, "?")
@@ -448,7 +471,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(serializer.to_json(unknown, readable_flavor=True), "?")
 
     def test_enum_user_defined_constant(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         primary_color_cls = module["PrimaryColor"]
         red = primary_color_cls.RED
         self.assertEqual(red.kind, "RED")
@@ -459,7 +482,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(serializer.to_json(red, readable_flavor=True), "RED")
 
     def test_enum_wrap(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         status_cls = module["Status"]
         error = status_cls.wrap_error("An error occurred")
         self.assertEqual(error.kind, "error")
@@ -473,7 +496,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
     def test_enum_wrap_around_mutable_struct(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         json_value_cls = module["JsonValue"]
         json_object_cls = json_value_cls.Object
         json_object = json_value_cls.wrap_object(json_object_cls().to_mutable())
@@ -484,7 +507,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
     def test_class_name(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         shape_cls = module["Shape"]
         json_value_cls = module["JsonValue"]
         json_object_cls = json_value_cls.Object
@@ -496,7 +519,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(json_object_cls.__qualname__, "JsonValue.Object")
 
     def test_struct_repr(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         point_cls = module["Point"]
         self.assertEqual(
             repr(point_cls(x=1.5)),
@@ -609,7 +632,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
     def test_enum_constant_repr(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         primary_color_cls = module["PrimaryColor"]
         parent_cls = module["Parent"]
         nested_enum_cls = parent_cls.NestedEnum
@@ -618,7 +641,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(repr(nested_enum_cls.UNKNOWN), "Parent.NestedEnum.UNKNOWN")
 
     def test_enum_value_repr(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         status_cls = module["Status"]
         json_value_cls = module["JsonValue"]
         json_object_cls = json_value_cls.Object
@@ -656,7 +679,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
     def test_find_in_keyed_items(self):
-        json_value_cls = self.init_test_module_classes()["JsonValue"]
+        json_value_cls = self.init_test_module()["JsonValue"]
         object_cls = json_value_cls.Object
         entry_cls = json_value_cls.ObjectEntry
         json_object = object_cls(
@@ -688,7 +711,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIs(entries.find_or_default("zoo"), entry_cls.DEFAULT)
 
     def test_find_in_keyed_items_with_complex_path(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         stuff_cls = module["Stuff"]
         enum_wrapper_cls = module["EnumWrapper"]
         status_cls = module["Status"]
@@ -714,14 +737,14 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIs(enum_wrappers.find("error"), enum_wrappers[1])
 
     def test_name_overrides(self):
-        name_overrides_cls = self.init_test_module_classes()["Stuff"].NameOverrides
+        name_overrides_cls = self.init_test_module()["Stuff"].NameOverrides
         name_overrides = name_overrides_cls(y=3)
         self.assertEqual(name_overrides.y, 3)
         self.assertEqual(name_overrides_cls.__name__, "NameOverrides")
         self.assertEqual(name_overrides_cls.__qualname__, "Stuff.NameOverrides")
 
     def test_mutable_getter_of_struct(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         segment_cls = module["Segment"]
         point_cls = module["Point"]
         segment = segment_cls(
@@ -739,7 +762,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
             self.assertEqual(str(e), "expected: Point or Point.Mutable; found: str")
 
     def test_mutable_getter_of_array(self):
-        module = self.init_test_module_classes()
+        module = self.init_test_module()
         shape_cls = module["Shape"]
         point_cls = module["Point"]
         shape = shape_cls(
@@ -751,3 +774,32 @@ class ModuleInitializerTestCase(unittest.TestCase):
         points = shape.mutable_points
         self.assertIsInstance(points, list)
         self.assertIs(shape.mutable_points, points)
+
+    def test_methods(self):
+        module = self.init_test_module()
+        first_method = module["FirstMethod"]
+        self.assertEqual(
+            first_method,
+            Method(
+                name="FirstMethod",
+                number=-300,
+                request_serializer=module["Point"].SERIALIZER,
+                response_serializer=module["Shape"].SERIALIZER,
+            ),
+        )
+        second_method = module["MethodVar"]
+        self.assertEqual(
+            second_method,
+            Method(
+                name="SecondMethod",
+                number=-301,
+                request_serializer=module["Point"].SERIALIZER,
+                response_serializer=module["Shape"].SERIALIZER,
+            ),
+        )
+
+    def test_constants(self):
+        module = self.init_test_module()
+        c = module["C"]
+        Point = module["Point"]
+        self.assertEqual(c, Point(1.5, 2.5))

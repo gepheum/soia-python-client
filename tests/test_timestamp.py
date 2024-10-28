@@ -3,6 +3,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import soialib
 from soialib.timestamp import Timestamp
 
 
@@ -121,3 +122,6 @@ class TimestampTestCase(unittest.TestCase):
             repr(Timestamp.MIN),
             "Timestamp(unix_millis=-8640000000000000)",
         )
+
+    def test_exported_from_soialib(self):
+        self.assertIs(soialib.Timestamp, Timestamp)
