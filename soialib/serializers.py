@@ -16,7 +16,7 @@ def array_serializer(item_serializer: Serializer[Item]) -> Serializer[tuple[Item
 
 def optional_serializer(
     other_serializer: Serializer[Other],
-) -> Serializer[Optional[Other]]:
+) -> Serializer[Other | None]:
     return make_serializer(get_optional_adapter(other_serializer._adapter))
 
 
