@@ -1,4 +1,4 @@
-from typing import Final, Literal, TypeVar, overload
+from typing import Final, Literal, Optional, TypeVar, overload
 
 from soialib.impl import primitives
 from soialib.impl.arrays import get_array_adapter
@@ -16,7 +16,7 @@ def array_serializer(item_serializer: Serializer[Item]) -> Serializer[tuple[Item
 
 def optional_serializer(
     other_serializer: Serializer[Other],
-) -> Serializer[Other | None]:
+) -> Serializer[Optional[Other]]:
     return make_serializer(get_optional_adapter(other_serializer._adapter))
 
 
