@@ -146,7 +146,7 @@ class StructAdapter(TypeAdapter):
         )
 
         # Initialize DEFAULT.
-        self.gen_class.DEFAULT.__init__()
+        _init_default(self.gen_class.DEFAULT, fields)
 
         # Define mutable getters
         for field in fields:
@@ -672,6 +672,18 @@ def _adjust_array_len_expr(var: str, removed_numbers: tuple[int, ...]) -> str:
         lower_bound = s.end + 1
     ret += var
     return ret
+
+
+def _init_default(default: Any, fields: Sequence[_Field]) -> None:
+    for field in fields:
+        attribute = field.field.attribute
+        get_field_default = make_function(
+            name="get_default",
+            params=(),
+            body=(Line.join("return ", field.type.default_expr()),),
+        )
+        object.__setattr__(default, attribute, get_field_default())
+    object.__setattr__(default, "_array_len", 0)
 
 
 def _make_mutable_getter(field: _Field) -> Callable[[Any], Any]:

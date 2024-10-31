@@ -259,6 +259,26 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         ),
                     ),
                 ),
+                spec.Struct(
+                    id="my/module.soia:RecOuter",
+                    fields=(
+                        spec.Field(
+                            name="r",
+                            number=0,
+                            type="my/module.soia:RecOuter.RecInner",
+                        ),
+                    ),
+                ),
+                spec.Struct(
+                    id="my/module.soia:RecOuter.RecInner",
+                    fields=(
+                        spec.Field(
+                            name="r",
+                            number=0,
+                            type="my/module.soia:RecOuter",
+                        ),
+                    ),
+                ),
             ),
             methods=(
                 spec.Method(
