@@ -230,7 +230,7 @@ def _make_frozen_class_init_fn(
     """
 
     # Set the params.
-    params: Params = ["self"]
+    params: Params = ["_self"]
     for field in fields:
         params.append(
             Param(
@@ -254,7 +254,7 @@ def _make_frozen_class_init_fn(
                     f"{field.field.number + 1} if ",
                     field.type.is_not_default_expr(
                         arg_expr=field.field.attribute,
-                        attr_expr=f"self.{field.field.attribute}",
+                        attr_expr=f"_self.{field.field.attribute}",
                     ),
                     " else ",
                 )
@@ -269,7 +269,7 @@ def _make_frozen_class_init_fn(
             attribute = field.field.attribute
             builder.append_ln(
                 obj_setattr,
-                '(self, "',
+                '(_self, "',
                 attribute,
                 '", ',
                 field.type.to_frozen_expr(attribute),
@@ -278,7 +278,7 @@ def _make_frozen_class_init_fn(
         # Set array length.
         builder.append_ln(
             obj_setattr,
-            f'(self, "_array_len", ',
+            f'(_self, "_array_len", ',
             array_len_expr(),
             ")",
         )
@@ -288,22 +288,22 @@ def _make_frozen_class_init_fn(
         # with regular assignment, and then change back the __class__ attribute.
         builder.append_ln(
             obj_setattr,
-            '(self, "__class__", ',
+            '(_self, "__class__", ',
             Expr.local("Simple", simple_class),
             ")",
         )
         for field in fields:
             attribute = field.field.attribute
             builder.append_ln(
-                "self.",
+                "_self.",
                 attribute,
                 " = ",
                 field.type.to_frozen_expr(attribute),
             )
         # Set array length.
-        builder.append_ln(f"self._array_len = ", array_len_expr())
+        builder.append_ln(f"_self._array_len = ", array_len_expr())
         # Change back the __class__.
-        builder.append_ln("self.__class__ = ", Expr.local("Frozen", frozen_class))
+        builder.append_ln("_self.__class__ = ", Expr.local("Frozen", frozen_class))
 
     return make_function(
         name="__init__",
@@ -317,7 +317,7 @@ def _make_mutable_class_init_fn(fields: Sequence[_Field]) -> Callable[[Any], Non
     Returns the implementation of the __init__() method of the mutable class.
     """
 
-    params: Params = ["self"]
+    params: Params = ["_self"]
     builder = BodyBuilder()
     for field in fields:
         attribute = field.field.attribute
@@ -328,7 +328,7 @@ def _make_mutable_class_init_fn(fields: Sequence[_Field]) -> Callable[[Any], Non
             )
         )
         builder.append_ln(
-            "self.",
+            "_self.",
             attribute,
             " = ",
             attribute,
