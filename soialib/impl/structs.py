@@ -1,12 +1,10 @@
 from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
-from typing import Any, Final, Union
+from typing import Any, Final, Union, cast
 
 from soialib import spec as _spec
-from soialib.impl.encoding import ARRAY_WIRE, LEN_BYTES, SMALL_ARRAY_WIRES
 from soialib.impl.function_maker import (
     BodyBuilder,
-    BodySpan,
     Expr,
     ExprLike,
     Line,
@@ -59,8 +57,8 @@ class StructAdapter(TypeAdapter):
         frozen_class = self.gen_class = _make_dataclass(slots)
         frozen_class.__name__ = spec.class_name
         frozen_class.__qualname__ = spec.class_qualname
-        frozen_class.__setattr__ = _Frozen.__setattr__
-        frozen_class.__delattr__ = _Frozen.__delattr__
+        frozen_class.__setattr__ = cast(Any, _Frozen.__setattr__)
+        frozen_class.__delattr__ = cast(Any, _Frozen.__delattr__)
         # We haven't added an __init__ method to the frozen class yet, so frozen_class()
         # returns an object with no attribute set. We'll set the attributes of DEFAULT
         # at the finalization step.
@@ -125,16 +123,21 @@ class StructAdapter(TypeAdapter):
         setattr(frozen_class, self.private_is_frozen_attr, True)
         setattr(mutable_class, self.private_is_frozen_attr, False)
 
-        frozen_class.__init__ = _make_frozen_class_init_fn(
-            fields,
-            frozen_class=frozen_class,
-            simple_class=simple_class,
+        frozen_class.__init__ = cast(
+            Any,
+            _make_frozen_class_init_fn(
+                fields,
+                frozen_class=frozen_class,
+                simple_class=simple_class,
+            ),
         )
-        mutable_class.__init__ = _make_mutable_class_init_fn(fields)
+        mutable_class.__init__ = cast(Any, _make_mutable_class_init_fn(fields))
 
         frozen_class.__eq__ = _make_eq_fn(fields)
-        frozen_class.__hash__ = _make_hash_fn(fields, self.record_hash)
-        frozen_class.__repr__ = mutable_class.__repr__ = _make_repr_fn(fields)
+        frozen_class.__hash__ = cast(Any, _make_hash_fn(fields, self.record_hash))
+        frozen_class.__repr__ = mutable_class.__repr__ = cast(
+            Any, _make_repr_fn(fields)
+        )
 
         frozen_class._tdj = _make_to_dense_json_fn(fields=fields)
         frozen_class._trj = _make_to_readable_json_fn(fields=fields)

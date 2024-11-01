@@ -6,7 +6,6 @@ from dataclasses import FrozenInstanceError, dataclass
 from typing import Any, Final, Union
 
 from soialib import spec as _spec
-from soialib.impl import primitives
 from soialib.impl.function_maker import (
     BodyBuilder,
     BodySpan,

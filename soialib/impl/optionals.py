@@ -4,7 +4,6 @@ from typing import TypeVar
 from weakref import WeakValueDictionary
 
 from soialib import spec
-from soialib.impl.encoding import NULL_WIRE
 from soialib.impl.function_maker import Expr, ExprLike
 from soialib.impl.type_adapter import TypeAdapter
 
