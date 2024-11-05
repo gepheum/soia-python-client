@@ -137,7 +137,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     constant_fields=(
                         spec.ConstantField(
                             name="OK",
-                            number=0,
+                            number=1,
                         ),
                     ),
                     value_fields=(
@@ -279,6 +279,27 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         ),
                     ),
                 ),
+                spec.Struct(
+                    id="my/module.soia:Foobar",
+                    fields=(
+                        spec.Field(
+                            name="a",
+                            number=1,
+                            type=spec.PrimitiveType.INT32,
+                        ),
+                        spec.Field(
+                            name="b",
+                            number=3,
+                            type=spec.PrimitiveType.INT32,
+                        ),
+                        spec.Field(
+                            name="point",
+                            number=4,
+                            type="my/module.soia:Point",
+                        ),
+                    ),
+                    removed_numbers=(0, 2),
+                ),
             ),
             methods=(
                 spec.Method(
@@ -353,27 +374,58 @@ class ModuleInitializerTestCase(unittest.TestCase):
         b = primitives_cls()
         self.assertEqual(hash(a), hash(b))
 
-    def test_to_dense_json(self):
+    def test_point_to_dense_json(self):
         point_cls = self.init_test_module()["Point"]
         point = point_cls(x=1.5, y=2.5)
         json = point_cls.SERIALIZER.to_json(point)
         self.assertEqual(json, [1.5, 2.5])
+        json = point_cls.SERIALIZER.to_json(point, readable=False)
+        self.assertEqual(json, [1.5, 2.5])
+        json_code = point_cls.SERIALIZER.to_json_code(point)
+        self.assertEqual(json_code, "[1.5,2.5]")
 
-    def test_to_readable_json(self):
+    def test_point_to_readable_json(self):
         point_cls = self.init_test_module()["Point"]
         point = point_cls(x=1.5, y=2.5)
-        json = point_cls.SERIALIZER.to_json(point, readable_flavor=True)
+        json = point_cls.SERIALIZER.to_json(point, readable=True)
         self.assertEqual(json, {"x": 1.5, "y": 2.5})
+        json_code = point_cls.SERIALIZER.to_json_code(point, readable=True)
+        self.assertEqual(json_code, '{\n  "x": 1.5,\n  "y": 2.5\n}')
 
-    def test_from_dense_json(self):
+    def test_point_from_dense_json(self):
         point_cls = self.init_test_module()["Point"]
         point = point_cls.SERIALIZER.from_json([1.5, 2.5])
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
 
-    def test_from_readable_json(self):
+    def test_point_from_readable_json(self):
         point_cls = self.init_test_module()["Point"]
         point = point_cls.SERIALIZER.from_json({"x": 1.5, "y": 2.5})
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
+        point = point_cls.SERIALIZER.from_json_code('{"x":1.5,"y":2.5}')
+        self.assertEqual(point, point_cls(x=1.5, y=2.5))
+        point = point_cls.SERIALIZER.from_json_code('{"x":1,"y":2}')
+        self.assertEqual(point.x, 1.0)
+        self.assertIsInstance(point.x, float)
+
+    def test_struct_to_dense_json_with_removed_fields(self):
+        test_module = self.init_test_module()
+        foobar_cls = test_module["Foobar"]
+        point_cls = test_module["Point"]
+        serializer = foobar_cls.SERIALIZER
+        foobar = foobar_cls()
+        self.assertEqual(serializer.to_json_code(foobar), "[]")
+        self.assertEqual(serializer.from_json_code("[]"), foobar)
+        foobar = foobar_cls(a=3)
+        self.assertEqual(serializer.to_json_code(foobar), "[0,3]")
+        self.assertEqual(serializer.from_json_code("[0,3]"), foobar)
+        self.assertEqual(serializer.from_json_code("[0,3.1]"), foobar)
+        foobar = foobar_cls(b=3, point=point_cls.DEFAULT)
+        self.assertEqual(serializer.to_json_code(foobar), "[0,0,0,3]")
+        self.assertEqual(serializer.from_json_code("[0,0,0,3]"), foobar)
+        self.assertEqual(serializer.from_json_code("[0,0,0,3.1]"), foobar)
+        foobar = foobar_cls(point=point_cls(x=2))
+        self.assertEqual(serializer.to_json_code(foobar), "[0,0,0,0,[2.0]]")
+        self.assertEqual(serializer.from_json_code("[0,0,0,0,[2.0]]"), foobar)
 
     def test_struct_ctor_accepts_mutable_struct(self):
         module = self.init_test_module()
@@ -488,7 +540,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIs(unknown.union, unknown)
         serializer = primary_color_cls.SERIALIZER
         self.assertEqual(serializer.to_json(unknown), 0)
-        self.assertEqual(serializer.to_json(unknown, readable_flavor=True), "?")
+        self.assertEqual(serializer.to_json(unknown, readable=True), "?")
 
     def test_enum_user_defined_constant(self):
         module = self.init_test_module()
@@ -499,7 +551,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIs(red.union, red)
         serializer = primary_color_cls.SERIALIZER
         self.assertEqual(serializer.to_json(red), 10)
-        self.assertEqual(serializer.to_json(red, readable_flavor=True), "RED")
+        self.assertEqual(serializer.to_json(red, readable=True), "RED")
 
     def test_enum_wrap(self):
         module = self.init_test_module()
@@ -511,7 +563,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         serializer = status_cls.SERIALIZER
         self.assertEqual(serializer.to_json(error), [2, "An error occurred"])
         self.assertEqual(
-            serializer.to_json(error, readable_flavor=True),
+            serializer.to_json(error, readable=True),
             {"kind": "error", "value": "An error occurred"},
         )
 
@@ -524,6 +576,35 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(json_object.value, json_object_cls.DEFAULT)
         self.assertEqual(
             json_object, json_value_cls.wrap_object(json_object_cls.DEFAULT)
+        )
+
+    def test_enum_to_json(self):
+        module = self.init_test_module()
+        status_cls = module["Status"]
+        serializer = status_cls.SERIALIZER
+        self.assertEqual(serializer.to_json(status_cls.UNKNOWN), 0)
+        self.assertEqual(serializer.to_json(status_cls.UNKNOWN, readable=True), "?")
+        self.assertEqual(serializer.to_json(status_cls.OK), 1)
+        self.assertEqual(serializer.to_json(status_cls.OK, readable=True), "OK")
+        self.assertEqual(serializer.to_json(status_cls.OK, readable=False), 1)
+        self.assertEqual(serializer.to_json(status_cls.wrap_error("E")), [2, "E"])
+        self.assertEqual(
+            serializer.to_json(status_cls.wrap_error("E"), readable=True),
+            {"kind": "error", "value": "E"},
+        )
+
+    def test_enum_from_json(self):
+        module = self.init_test_module()
+        status_cls = module["Status"]
+        serializer = status_cls.SERIALIZER
+        self.assertEqual(serializer.from_json(0), status_cls.UNKNOWN)
+        self.assertEqual(serializer.from_json("?"), status_cls.UNKNOWN)
+        self.assertEqual(serializer.from_json(1), status_cls.OK)
+        self.assertEqual(serializer.from_json("OK"), status_cls.OK)
+        self.assertEqual(serializer.from_json([2, "E"]), status_cls.wrap_error("E"))
+        self.assertEqual(
+            serializer.from_json({"kind": "error", "value": "E"}),
+            status_cls.wrap_error("E"),
         )
 
     def test_class_name(self):
@@ -822,4 +903,4 @@ class ModuleInitializerTestCase(unittest.TestCase):
         module = self.init_test_module()
         c = module["C"]
         Point = module["Point"]
-        self.assertEqual(c, Point(1.5, 2.5))
+        self.assertEqual(c, Point(x=1.5, y=2.5))

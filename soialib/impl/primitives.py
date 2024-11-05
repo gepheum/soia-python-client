@@ -33,9 +33,9 @@ class _BoolAdapter(AbstractPrimitiveAdapter):
         readable: bool,
     ) -> ExprLike:
         if readable:
-            return Expr.join("(1 if ", in_expr, " else 0)")
+            return Expr.join("(True if ", in_expr, " else False)")
         else:
-            return in_expr
+            return Expr.join("(1 if ", in_expr, " else 0)")
 
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
         return Expr.join("(True if ", json_expr, " else False)")
@@ -52,6 +52,8 @@ class _AbstractIntAdapter(AbstractPrimitiveAdapter):
         return "0"
 
     def to_frozen_expr(self, arg_expr: ExprLike) -> Expr:
+        round_expr = Expr.local("round", round)
+        # Must accept float inputs and turn them into ints.
         return Expr.join("(", arg_expr, " | 0)")
 
     def is_not_default_expr(self, arg_expr: ExprLike, attr_expr: ExprLike) -> ExprLike:
@@ -61,7 +63,18 @@ class _AbstractIntAdapter(AbstractPrimitiveAdapter):
         return in_expr
 
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
-        return Expr.join("(", json_expr, " | 0)")
+        # Must accept float inputs and turn them into ints.
+        return Expr.join(
+            "(",
+            json_expr,
+            " if ",
+            json_expr,
+            ".__class__ is (0).__class__ else ",
+            Expr.local("_round", round),
+            "(",
+            json_expr,
+            "))",
+        )
 
 
 @dataclass(frozen=True)

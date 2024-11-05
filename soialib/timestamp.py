@@ -97,7 +97,7 @@ class Timestamp:
 
     def _trj(self) -> Any:
         """To readable JSON."""
-        iso = self._iso_format
+        iso = self._iso_format()
         if iso:
             return {
                 "unix_millis": self.unix_millis,

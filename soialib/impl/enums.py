@@ -1,19 +1,10 @@
-# TODO: test
-# TODO: unrecognized fields (and handles removed fields)
-
+import copy
 from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
 from typing import Any, Final, Union
 
 from soialib import spec as _spec
-from soialib.impl.function_maker import (
-    BodyBuilder,
-    BodySpan,
-    Expr,
-    ExprLike,
-    Line,
-    make_function,
-)
+from soialib.impl.function_maker import BodyBuilder, Expr, ExprLike, Line, make_function
 from soialib.impl.repr import repr_impl
 from soialib.impl.type_adapter import TypeAdapter
 
@@ -39,7 +30,6 @@ class EnumAdapter(TypeAdapter):
 
         private_is_enum_attr = _name_private_is_enum_attr(spec.id)
         self.private_is_enum_attr = private_is_enum_attr
-        # TODO: comment
         setattr(base_class, private_is_enum_attr, True)
 
         # Add the constants.
@@ -80,7 +70,10 @@ class EnumAdapter(TypeAdapter):
             setattr(base_class, f"wrap_{value_field.spec.name}", wrap_fn)
 
         base_class._fj = _make_from_json_fn(
-            self.all_constant_fields, value_fields, base_class
+            self.all_constant_fields,
+            value_fields,
+            set(self.spec.removed_numbers),
+            base_class,
         )
 
         # Mark finalization as done.
@@ -115,7 +108,6 @@ class EnumAdapter(TypeAdapter):
 
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
         fn_name = "_fj"
-        # TODO: comment
         from_json_fn = getattr(self.gen_class, fn_name, None)
         if from_json_fn:
             return Expr.join(Expr.local("_fj?", from_json_fn), "(", json_expr, ")")
@@ -148,7 +140,6 @@ def _make_base_class(spec: _spec.Enum) -> type:
             raise FrozenInstanceError(self.__class__.__qualname__)
 
         def __eq__(self, other: Any) -> bool:
-            # TODO: make it work with unrecognized versus UNKNOWN
             if isinstance(other, BaseClass):
                 return other.kind == self.kind and other.value == self.value
             return NotImplemented
@@ -163,7 +154,7 @@ def _make_base_class(spec: _spec.Enum) -> type:
 
 
 def _make_constant_class(base_class: type, spec: _spec.ConstantField) -> type:
-    class ConstantClass(base_class):
+    class Constant(base_class):
         __slots__ = ()
 
         kind: Final[str] = spec.name
@@ -182,7 +173,36 @@ def _make_constant_class(base_class: type, spec: _spec.ConstantField) -> type:
         def __repr__(self) -> str:
             return f"{base_class.__qualname__}.{spec.attribute}"
 
-    return ConstantClass
+    return Constant
+
+
+def _make_unrecognized_class(base_class: type) -> type:
+    """Wraps around an unrecognized dense JSON.
+
+    Looks and acts just like the UNKNOWN constant, except that its JSON representation
+    is the original unrecognized dense JSON.
+    """
+
+    class Unrecognized(base_class):
+        __slots__ = ("_dj",)
+
+        kind: Final[str] = "?"
+        _number: Final[int] = 0
+        # dense JSON
+        _dj: Any
+        # readable JSON
+        _rj: Final[str] = "?"
+        # has value
+        _hv: Final[bool] = False
+
+        def __init__(self, dj: Any):
+            # Do not call super().__init__().
+            object.__setattr__(self, "_dj", copy.deepcopy(dj))
+
+        def __repr__(self) -> str:
+            return f"{base_class.__qualname__}.UNKNOWN"
+
+    return Unrecognized
 
 
 def _make_value_class(
@@ -192,7 +212,7 @@ def _make_value_class(
 ) -> type:
     number = field_spec.number
 
-    class ValueClass(base_class):
+    class Value(base_class):
         __slots__ = ()
 
         kind: Final[str] = field_spec.name
@@ -212,7 +232,7 @@ def _make_value_class(
                 body = value_repr.repr
             return f"{base_class.__qualname__}.wrap_{field_spec.name}({body})"
 
-    ret = ValueClass
+    ret = Value
 
     ret._dj = property(
         make_function(
@@ -285,9 +305,13 @@ def _make_wrap_fn(field: _ValueField) -> Callable[[Any], Any]:
 def _make_from_json_fn(
     constant_fields: Sequence[_spec.ConstantField],
     value_fields: Sequence[_ValueField],
+    removed_numbers: set[int],
     base_class: type,
 ) -> Callable[[Any], Any]:
+    unrecognized_class = _make_unrecognized_class(base_class)
+    unrecognized_class_local = Expr.local("Unrecognized", unrecognized_class)
     obj_setattr_local = Expr.local("obj_settatr", object.__setattr__)
+    removed_numbers_local = Expr.local("removed_numbers", removed_numbers)
 
     key_to_constant: dict[Union[int, str], Any] = {}
     for field in constant_fields:
@@ -317,12 +341,15 @@ def _make_from_json_fn(
         builder.append_ln("  if json == 0:")
         builder.append_ln("    return ", unknown_constant_local)
     else:
+        # `json.__class__ is int` is significantly faster than `isinstance(json, int)`
         builder.append_ln("  if json.__class__ is int:")
         builder.append_ln("    try:")
         builder.append_ln("      return ", key_to_constant_local, "[json]")
         builder.append_ln("    except:")
-        # TODO: handle unrecognized fields!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        builder.append_ln("      return ...")
+        if removed_numbers:
+            builder.append_ln("      if json in ", removed_numbers_local, ":")
+            builder.append_ln("        return ", unknown_constant_local)
+        builder.append_ln("      return ", unrecognized_class_local, "(json)")
 
     def append_number_branches(numbers: list[int], indent: str) -> None:
         if len(numbers) == 1:
@@ -331,7 +358,9 @@ def _make_from_json_fn(
             value_class_local = Expr.local("cls?", field.value_class)
             value_expr = field.field_type.from_json_expr(Expr.join("json[1]"))
             builder.append_ln(f"{indent}ret = ", value_class_local, "()")
-            builder.append_ln(indent, obj_setattr_local, "(ret, ", value_expr, ")")
+            builder.append_ln(
+                indent, obj_setattr_local, '(ret, "value", ', value_expr, ")"
+            )
             builder.append_ln(f"{indent}return ret")
         else:
             indented = f"  {indent}"
@@ -343,18 +372,24 @@ def _make_from_json_fn(
             builder.append_ln(f"{indent}else:")
             append_number_branches(numbers[mid_index:], indented)
 
+    # `json.__class__ is list` is significantly faster than `isinstance(json, list)`
     builder.append_ln("  elif json.__class__ is list:")
+    builder.append_ln("    number = json[0]")
     if not value_fields:
-        # TODO: handle unrecognized fields!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        builder.append_ln("    return ...")
+        # The field was either removed or is an unrecognized field.
+        if removed_numbers:
+            builder.append_ln("    if number in ", removed_numbers_local, ":")
+            builder.append_ln("      return ", unknown_constant_local)
+        builder.append_ln("    return ", unrecognized_class_local, "(json)")
     else:
         if len(value_fields) == 1:
             builder.append_ln(f"    if number != {value_fields[0].spec.number}:")
         else:
             builder.append_ln("    if number not in ", value_keys_local, ":")
-        # TODO: handle unrecognized fields!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        builder.append_ln("      return ...")
-        builder.append_ln("    number = json[0]")
+        if removed_numbers:
+            builder.append_ln("      if number in ", removed_numbers_local, ":")
+            builder.append_ln("        return ", unknown_constant_local)
+        builder.append_ln("      return ", unrecognized_class_local, "(json)")
         append_number_branches(sorted(numbers), "    ")
 
     # READABLE FORMAT
@@ -366,7 +401,7 @@ def _make_from_json_fn(
         builder.append_ln("    try:")
         builder.append_ln("      return ", key_to_constant_local, "[json]")
         builder.append_ln("    except:")
-        # TODO: comment
+        # In readable mode, drop unrecognized values and use UNKNOWN instead.
         builder.append_ln("      return ", unknown_constant_local)
 
     def append_name_branches(names: list[str], indent: str) -> None:
@@ -376,29 +411,37 @@ def _make_from_json_fn(
             value_class_local = Expr.local("cls?", field.value_class)
             value_expr = field.field_type.from_json_expr("json['value']")
             builder.append_ln(f"{indent}ret = ", value_class_local, "()")
-            builder.append_ln(indent, obj_setattr_local, "(ret, ", value_expr, ")")
+            builder.append_ln(
+                indent, obj_setattr_local, '(ret, "value", ', value_expr, ")"
+            )
             builder.append_ln(f"{indent}return ret")
         else:
             indented = f"  {indent}"
             mid_index = int(len(names) / 2)
             mid_name = names[mid_index - 1]
             operator = "==" if mid_index == 1 else "<="
-            builder.append_ln(f"{indent}if name {operator} '{mid_name}':")
+            builder.append_ln(f"{indent}if kind {operator} '{mid_name}':")
             append_name_branches(names[0:mid_index], indented)
             builder.append_ln(f"{indent}else:")
             append_name_branches(names[mid_index:], indented)
 
     builder.append_ln("  elif isinstance(json, dict):")
     if not value_fields:
-        # TODO: comment
         builder.append_ln("    return ", unknown_constant_local)
     else:
-        builder.append_ln("    name = json['name']")
-        builder.append_ln("    if name not in ", value_keys_local, ":")
-        # TODO: comment
+        builder.append_ln("    kind = json['kind']")
+        builder.append_ln("    if kind not in ", value_keys_local, ":")
         builder.append_ln("      return ", unknown_constant_local)
         builder.append_ln("    else:")
         append_name_branches(sorted(names), "      ")
+
+    # In the unlikely event that json.loads() returns an instance of a subclass of int.
+    builder.append_ln("  elif isinstance(json, int):")
+    builder.append_ln("    json = int(json)")
+    builder.append_ln("  elif isinstance(json, list):")
+    builder.append_ln("    json = list(json)")
+    builder.append_ln("  else:")
+    builder.append_ln("    return TypeError()")
 
     return make_function(
         name="from_json",

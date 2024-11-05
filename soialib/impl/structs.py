@@ -1,3 +1,4 @@
+import copy
 from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
 from typing import Any, Final, Union, cast
@@ -48,8 +49,8 @@ class StructAdapter(TypeAdapter):
         self.private_is_frozen_attr = _name_private_is_frozen_attr(spec.id)
 
         slots = tuple(f.attribute for f in self.spec.fields) + (
-            # Unknown fields encountered during deserialization.
-            "_unknown",
+            # Unrecognized fields encountered during deserialization.
+            "_unrecognized",
             # Lowest number greater than the number of every field with a non-default
             # value.
             "_array_len",
@@ -96,7 +97,6 @@ class StructAdapter(TypeAdapter):
             )
         )
 
-        # TODO: do I even need this?
         # Aim to have dependencies finalized *before* the dependent. It's not always
         # possible, because there can be cyclic dependencies.
         # The function returned by the do_x_fn() method of a dependency is marginally
@@ -165,7 +165,8 @@ class StructAdapter(TypeAdapter):
         return Expr.local("_d?", self.gen_class.DEFAULT)
 
     def to_frozen_expr(self, arg_expr: ExprLike) -> Expr:
-        # TODO: comment
+        # The goal of referring to private_is_frozen_attr is to raise an error if the
+        # struct has the wrong type.
         return Expr.join(
             "(",
             arg_expr,
@@ -188,7 +189,7 @@ class StructAdapter(TypeAdapter):
 
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
         fn_name = "_fj"
-        # TODO: comment
+        # The _fj method may not have been added to the class yet.
         from_json_fn = getattr(self.gen_class, fn_name, None)
         if from_json_fn:
             return Expr.join(Expr.local("_fj?", from_json_fn), "(", json_expr, ")")
@@ -234,6 +235,8 @@ def _make_frozen_class_init_fn(
 
     # Set the params.
     params: Params = ["_self"]
+    if fields:
+        params.append("*")
     for field in fields:
         params.append(
             Param(
@@ -265,8 +268,8 @@ def _make_frozen_class_init_fn(
         spans.append("0")
         return Expr.join(*spans)
 
-    if len(fields) < 4:
-        # If the class has less than 4 fields, it is faster to assign every field with
+    if len(fields) < 3:
+        # If the class has less than 3 fields, it is faster to assign every field with
         # object.__setattr__().
         for field in fields:
             attribute = field.field.attribute
@@ -278,6 +281,8 @@ def _make_frozen_class_init_fn(
                 field.type.to_frozen_expr(attribute),
                 ")",
             )
+        # Set the _unrecognized field.
+        builder.append_ln(obj_setattr, '(_self, "_unrecognized", ())')
         # Set array length.
         builder.append_ln(
             obj_setattr,
@@ -303,6 +308,8 @@ def _make_frozen_class_init_fn(
                 " = ",
                 field.type.to_frozen_expr(attribute),
             )
+        # Set the _unrecognized field.
+        builder.append_ln("_self._unrecognized = ()")
         # Set array length.
         builder.append_ln(f"_self._array_len = ", array_len_expr())
         # Change back the __class__.
@@ -336,6 +343,7 @@ def _make_mutable_class_init_fn(fields: Sequence[_Field]) -> Callable[[Any], Non
             " = ",
             attribute,
         )
+    builder.append_ln("_self._unrecognized = ()")
     return make_function(
         name="__init__",
         params=params,
@@ -361,7 +369,7 @@ def _make_to_mutable_fn(
     for field in fields:
         attribute = field.field.attribute
         builder.append_ln("ret.", attribute, " = self.", attribute)
-    # TODO: unknown field
+    builder.append_ln("ret._unrecognized = self._unrecognized")
     builder.append_ln(
         "ret.__class__ = ",
         Expr.local("mutable_class", mutable_class),
@@ -399,10 +407,18 @@ def _make_to_frozen_fn(
             field.type.to_frozen_expr(f"self.{attribute}"),
         )
 
-    # TODO: unknown field
+    # Set the _unrecognized field.
+    builder.append_ln("ret._unrecognized = self._unrecognized")
 
     def array_len_expr() -> Expr:
         spans: list[LineSpanLike] = []
+        spans.append(
+            LineSpan.join(
+                f"{_get_num_slots(fields)} + ",
+                Expr.local("_len", len),
+                "(ret._unrecognized) if ret._unrecognized else ",
+            )
+        )
         # Fields are sorted by number.
         for field in reversed(fields):
             attr_expr = f"ret.{field.field.attribute}"
@@ -416,8 +432,10 @@ def _make_to_frozen_fn(
         spans.append("0")
         return Expr.join(*spans)
 
+    # Set the _unrecognized field.
+    builder.append_ln("ret._unrecognized = self._unrecognized")
     # Set array length.
-    builder.append_ln(f"ret._array_len = ", array_len_expr())
+    builder.append_ln("ret._array_len = ", array_len_expr())
 
     builder.append_ln(
         "ret.__class__ = ",
@@ -464,7 +482,6 @@ def _make_hash_fn(
     """
 
     components: list[ExprLike] = []
-    # TODO: comment
     components.append(str(record_hash))
     for field in fields:
         components.append(f"self.{field.field.attribute}")
@@ -491,7 +508,6 @@ def _make_repr_fn(fields: Sequence[_Field]) -> Callable[[Any], Any]:
     for field in fields:
         attribute = field.field.attribute
         # TODO: comment, is_not_default_expr only works on a frozen expression...
-        # TODO: comment; we use try because maybe in mutable we have the wrong type and we still want to be able to repr it
         to_frozen_expr = field.type.to_frozen_expr(f"(self.{attribute})")
         is_not_default_expr = field.type.is_not_default_expr(
             to_frozen_expr, to_frozen_expr
@@ -515,7 +531,7 @@ def _make_repr_fn(fields: Sequence[_Field]) -> Callable[[Any], Any]:
 
 def _make_to_dense_json_fn(fields: Sequence[_Field]) -> Callable[[Any], Any]:
     builder = BodyBuilder()
-    builder.append_ln(f"l = self._array_len")
+    builder.append_ln("l = self._array_len")
     builder.append_ln("ret = [0] * l")
     for field in fields:
         builder.append_ln(f"if l <= {field.field.number}:")
@@ -527,7 +543,10 @@ def _make_to_dense_json_fn(fields: Sequence[_Field]) -> Callable[[Any], Any]:
                 readable=False,
             ),
         )
-    # TODO: unknown fields
+    num_slots = _get_num_slots(fields)
+    builder.append_ln(f"if l <= {num_slots}:")
+    builder.append_ln("  return ret")
+    builder.append_ln(f"ret[{num_slots}:] = self._unrecognized")
     builder.append_ln("return ret")
     return make_function(
         name="to_dense_json",
@@ -553,7 +572,6 @@ def _make_to_readable_json_fn(fields: Sequence[_Field]) -> Callable[[Any], Any]:
                 readable=True,
             ),
         )
-    # TODO: unknown fields
     builder.append_ln("return ret")
     return make_function(
         name="to_readable_json",
@@ -595,10 +613,20 @@ def _make_from_json_fn(
             f" if array_len <= {number} else ",
             field.type.from_json_expr(item_expr),
         )
+    num_slots = _get_num_slots(fields)
+    builder.append_ln(f"  if array_len <= {num_slots}:")
+    builder.append_ln("    ret._unrecognized = ()")
     builder.append_ln(
-        f"  ret._array_len = ",
+        "    ret._array_len = ",
         _adjust_array_len_expr("array_len", removed_numbers),
     )
+    builder.append_ln("  else:")
+    builder.append_ln(
+        f"    ret._unrecognized = ",
+        Expr.local("deepcopy", copy.deepcopy),
+        f"(json[{num_slots}:])",
+    )
+    builder.append_ln("    ret._array_len = array_len")
 
     builder.append_ln("else:")
     builder.append_ln("  array_len = 0")
@@ -614,7 +642,9 @@ def _make_from_json_fn(
         )
         builder.append_ln("  else:")
         builder.append_ln(f"    {lvalue} = ", field.type.default_expr())
-    builder.append_ln(f"  ret._array_len = array_len")
+    # Drop unrecognized fields in readable mode.
+    builder.append_ln("  ret._unrecognized = ()")
+    builder.append_ln("  ret._array_len = array_len")
 
     builder.append_ln("ret.__class__ = ", Expr.local("Frozen", frozen_class))
     builder.append_ln("return ret")
@@ -686,6 +716,7 @@ def _init_default(default: Any, fields: Sequence[_Field]) -> None:
             body=(Line.join("return ", field.type.default_expr()),),
         )
         object.__setattr__(default, attribute, get_field_default())
+    object.__setattr__(default, "_unrecognized", ())
     object.__setattr__(default, "_array_len", 0)
 
 
@@ -731,3 +762,7 @@ def _name_private_is_frozen_attr(record_id: str) -> str:
     record_name = _spec.RecordId.parse(record_id).name
     hex_hash = hex(abs(hash(record_id)))[:6]
     return f"_is_{record_name}_{hex_hash}"
+
+
+def _get_num_slots(fields: Sequence[_Field]) -> int:
+    return (fields[-1].field.number + 1) if fields else 0
