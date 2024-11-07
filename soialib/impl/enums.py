@@ -198,6 +198,7 @@ def _make_unrecognized_class(base_class: type) -> type:
         def __init__(self, dj: Any):
             # Do not call super().__init__().
             object.__setattr__(self, "_dj", copy.deepcopy(dj))
+            object.__setattr__(self, "value", None)
 
         def __repr__(self) -> str:
             return f"{base_class.__qualname__}.UNKNOWN"

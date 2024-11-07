@@ -1,5 +1,4 @@
-# TODO: test from JSON
-
+import dataclasses
 import unittest
 from typing import Any
 
@@ -25,10 +24,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         ),
                         spec.Field(
                             name="y",
-                            number=1,
+                            number=2,
                             type=spec.PrimitiveType.FLOAT32,
                         ),
                     ),
+                    removed_numbers=(1,),
                 ),
                 spec.Struct(
                     id="my/module.soia:Segment",
@@ -115,6 +115,17 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         ),
                     ),
                 ),
+                spec.Struct(
+                    id="my/module.soia:After",
+                    fields=(
+                        spec.Field(
+                            name="points",
+                            number=0,
+                            type=spec.ArrayType("my/module.soia:Point"),
+                            has_mutable_getter=True,
+                        ),
+                    ),
+                ),
                 spec.Enum(
                     id="my/module.soia:PrimaryColor",
                     constant_fields=(
@@ -154,35 +165,39 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     constant_fields=(
                         spec.ConstantField(
                             name="NULL",
-                            number=0,
+                            number=1,
                         ),
                     ),
                     value_fields=(
                         spec.ValueField(
                             name="bool",
-                            number=1,
+                            number=2,
                             type=spec.PrimitiveType.BOOL,
                         ),
                         spec.ValueField(
                             name="number",
-                            number=2,
+                            number=3,
                             type=spec.PrimitiveType.FLOAT64,
                         ),
                         spec.ValueField(
                             name="string",
-                            number=3,
+                            number=4,
                             type=spec.PrimitiveType.STRING,
                         ),
                         spec.ValueField(
                             name="array",
-                            number=4,
+                            number=5,
                             type=spec.ArrayType("my/module.soia:JsonValue"),
                         ),
                         spec.ValueField(
                             name="object",
-                            number=5,
+                            number=6,
                             type="my/module.soia:JsonValue.Object",
                         ),
+                    ),
+                    removed_numbers=(
+                        100,
+                        101,
                     ),
                 ),
                 spec.Struct(
@@ -320,7 +335,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 spec.Constant(
                     name="C",
                     type="my/module.soia:Point",
-                    json_code="[1.5, 2.5]",
+                    json_code="[1.5, 0, 2.5]",
                 ),
             ),
             globals=globals,
@@ -359,7 +374,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         point_cls = self.init_test_module()["Point"]
         point_cls.OrMutable
 
-    def test_default_values(self):
+    def test_primitives_default_values(self):
         primitives_cls = self.init_test_module()["Primitives"]
         a = primitives_cls(
             bool=False,
@@ -372,17 +387,91 @@ class ModuleInitializerTestCase(unittest.TestCase):
             t=Timestamp.EPOCH,
         )
         b = primitives_cls()
+        self.assertEqual(a, b)
         self.assertEqual(hash(a), hash(b))
+
+    def test_primitives_to_json(self):
+        primitives_cls = self.init_test_module()["Primitives"]
+        serializer = primitives_cls.SERIALIZER
+        p = primitives_cls(
+            bool=True,
+            bytes=b"a",
+            f32=3.14,
+            f64=3.14,
+            i32=1,
+            i64=2,
+            u64=3,
+            t=Timestamp.from_unix_millis(4),
+        )
+        self.assertEqual(serializer.to_json(p), [1, "61", 3.14, 3.14, 1, 2, 3, "", 4])
+
+    def test_primitives_from_json(self):
+        primitives_cls = self.init_test_module()["Primitives"]
+        serializer = primitives_cls.SERIALIZER
+        json = [0] * 100
+        self.assertEqual(serializer.from_json(json), primitives_cls.DEFAULT)
+        self.assertEqual(
+            serializer.from_json([1, "61", 3.14, 3.14, 1, 2, 3, "", 4]),
+            primitives_cls(
+                bool=True,
+                bytes=b"a",
+                f32=3.14,
+                f64=3.14,
+                i32=1,
+                i64=2,
+                u64=3,
+                t=Timestamp.from_unix_millis(4),
+            ),
+        )
+
+    def test_primitives_repr(self):
+        primitives_cls = self.init_test_module()["Primitives"]
+        serializer = primitives_cls.SERIALIZER
+        p = primitives_cls(
+            bool=True,
+            bytes=b"a",
+            f32=3.14,
+            f64=3.14,
+            i32=1,
+            i64=2,
+            u64=3,
+            t=Timestamp.from_unix_millis(4),
+        )
+        self.assertEqual(
+            str(p),
+            "Primitives(\n  bool=True,\n  bytes=b'a',\n  f32=3.14,\n  f64=3.14,\n  i32=1,\n  i64=2,\n  u64=3,\n  t=Timestamp(\n    unix_millis=4,\n    _formatted='1970-01-01T00:00:00.004000Z',\n  ),\n)",
+        )
+
+    def test_from_json_converts_between_ints_and_floats(self):
+        primitives_cls = self.init_test_module()["Primitives"]
+        serializer = primitives_cls.SERIALIZER
+        p = serializer.from_json([0, 0, 3])
+        self.assertEqual(p.f32, 3.0)
+        self.assertIsInstance(p.f32, float)
+        p = serializer.from_json({"i32": 1.2})
+        self.assertEqual(p.i32, 1)
+        self.assertIsInstance(p.i32, int)
+
+    def test_cannot_mutate_frozen_class(self):
+        point_cls = self.init_test_module()["Point"]
+        serializer = point_cls.SERIALIZER
+        point = point_cls(x=1.5, y=2.5)
+        try:
+            point.x = 3.5
+            self.fail("expected to raise FrozenInstanceError")
+        except dataclasses.FrozenInstanceError:
+            pass
+        self.assertEqual(point.x, 1.5)
 
     def test_point_to_dense_json(self):
         point_cls = self.init_test_module()["Point"]
+        serializer = point_cls.SERIALIZER
         point = point_cls(x=1.5, y=2.5)
-        json = point_cls.SERIALIZER.to_json(point)
-        self.assertEqual(json, [1.5, 2.5])
-        json = point_cls.SERIALIZER.to_json(point, readable=False)
-        self.assertEqual(json, [1.5, 2.5])
-        json_code = point_cls.SERIALIZER.to_json_code(point)
-        self.assertEqual(json_code, "[1.5,2.5]")
+        self.assertEqual(serializer.to_json(point), [1.5, 0, 2.5])
+        self.assertEqual(serializer.to_json(point, readable=False), [1.5, 0, 2.5])
+        self.assertEqual(serializer.to_json_code(point), "[1.5,0,2.5]")
+        point = point_cls(x=1.5, y=0.0)
+        self.assertEqual(serializer.to_json(point), [1.5])
 
     def test_point_to_readable_json(self):
         point_cls = self.init_test_module()["Point"]
@@ -394,8 +483,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
     def test_point_from_dense_json(self):
         point_cls = self.init_test_module()["Point"]
-        point = point_cls.SERIALIZER.from_json([1.5, 2.5])
-        self.assertEqual(point, point_cls(x=1.5, y=2.5))
+        serializer = point_cls.SERIALIZER
+        self.assertEqual(serializer.from_json([1.5, 0, 2.5]), point_cls(x=1.5, y=2.5))
+        self.assertEqual(serializer.from_json([1.5]), point_cls(x=1.5))
+        self.assertEqual(serializer.from_json([0.0]), point_cls.DEFAULT)
+        self.assertEqual(serializer.from_json(0), point_cls.DEFAULT)
 
     def test_point_from_readable_json(self):
         point_cls = self.init_test_module()["Point"]
@@ -403,9 +495,20 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
         point = point_cls.SERIALIZER.from_json_code('{"x":1.5,"y":2.5}')
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
+        point = point_cls.SERIALIZER.from_json_code('{"x":1.5,"y":2.5,"z":[]}')
+        self.assertEqual(point, point_cls(x=1.5, y=2.5))
         point = point_cls.SERIALIZER.from_json_code('{"x":1,"y":2}')
         self.assertEqual(point.x, 1.0)
         self.assertIsInstance(point.x, float)
+
+    def test_point_with_unrecognized_and_removed_fields(self):
+        point_cls = self.init_test_module()["Point"]
+        serializer = point_cls.SERIALIZER
+        point = serializer.from_json([1.5, 1, 2.5, True])
+        self.assertEqual(point, point_cls(x=1.5, y=2.5))
+        self.assertEqual(serializer.to_json(point), [1.5, 0, 2.5, True])
+        point = point.to_mutable().to_frozen()
+        self.assertEqual(serializer.to_json(point), [1.5, 0, 2.5, True])
 
     def test_struct_to_dense_json_with_removed_fields(self):
         test_module = self.init_test_module()
@@ -606,6 +709,92 @@ class ModuleInitializerTestCase(unittest.TestCase):
             serializer.from_json({"kind": "error", "value": "E"}),
             status_cls.wrap_error("E"),
         )
+
+    def test_complex_enum_from_json(self):
+        module = self.init_test_module()
+        json_value_cls = module["JsonValue"]
+        serializer = json_value_cls.SERIALIZER
+        json_value = serializer.from_json(
+            [
+                5,
+                [
+                    0,
+                    1,
+                    [2, True],
+                    [3, 3.14],
+                    [4, "foo"],
+                    [
+                        6,
+                        [["a", 0], ["b", 0]],
+                    ],
+                    [5, [[5, []]]],
+                ],
+            ]
+        )
+        self.assertEqual(
+            json_value,
+            json_value_cls.wrap_array(
+                [
+                    json_value_cls.UNKNOWN,
+                    json_value_cls.NULL,
+                    json_value_cls.wrap_bool(True),
+                    json_value_cls.wrap_number(3.14),
+                    json_value_cls.wrap_string("foo"),
+                    json_value_cls.wrap_object(
+                        json_value_cls.Object(
+                            entries=[
+                                json_value_cls.ObjectEntry(),
+                                json_value_cls.ObjectEntry.DEFAULT,
+                            ],
+                        )
+                    ),
+                    json_value_cls.wrap_array(
+                        [
+                            json_value_cls.wrap_array([]),
+                        ]
+                    ),
+                ]
+            ),
+        )
+        self.assertEqual(
+            serializer.from_json(
+                {
+                    "kind": "array",
+                    "value": [
+                        "?",
+                        "NULL",
+                        {"kind": "bool", "value": True},
+                        {"kind": "number", "value": 3.14},
+                        {"kind": "string", "value": "foo"},
+                        {"kind": "object", "value": {"entries": [{}, {}]}},
+                        {"kind": "array", "value": [{"kind": "array", "value": []}]},
+                    ],
+                }
+            ),
+            json_value,
+        )
+
+    def test_struct_with_enum_field(self):
+        json_value_cls = self.init_test_module()["JsonValue"]
+        json_object_entry_cls = json_value_cls.ObjectEntry
+        self.assertEqual(json_object_entry_cls.DEFAULT.value, json_value_cls.UNKNOWN)
+        self.assertEqual(json_object_entry_cls().value, json_value_cls.UNKNOWN)
+
+    def test_enum_with_unrecognized_and_removed_fields(self):
+        json_value_cls = self.init_test_module()["JsonValue"]
+        serializer = json_value_cls.SERIALIZER
+        json_value = serializer.from_json(100)  # removed
+        self.assertEqual(json_value, json_value_cls.UNKNOWN)
+        self.assertEqual(serializer.to_json(json_value), 0)
+        json_value = serializer.from_json([101, True])  # removed
+        self.assertEqual(json_value, json_value_cls.UNKNOWN)
+        self.assertEqual(serializer.to_json(json_value), 0)
+        json_value = serializer.from_json(102)  # unrecognized
+        self.assertEqual(json_value, json_value_cls.UNKNOWN)
+        self.assertEqual(serializer.to_json(json_value), 102)
+        json_value = serializer.from_json([102, True])  # unrecognized
+        self.assertEqual(json_value, json_value_cls.UNKNOWN)
+        self.assertEqual(serializer.to_json(json_value), [102, True])
 
     def test_class_name(self):
         module = self.init_test_module()

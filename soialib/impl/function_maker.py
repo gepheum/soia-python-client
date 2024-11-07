@@ -120,15 +120,11 @@ class LineSpan:
 _EMPTY_LINE_SPAN = LineSpan(())
 
 
-# TODO: comment
 LineSpanLike = Union[str, LineSpan]
 
 
 # A type alias to use when the line span is a Python expression.
 Expr = LineSpan
-
-
-# TODO: comment
 ExprLike = LineSpanLike
 
 

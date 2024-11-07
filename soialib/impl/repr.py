@@ -31,7 +31,6 @@ def repr_impl(input: Any) -> ReprResult:
             return ReprResult(f"[\n{body}]", complex=True)
     elif isinstance(input, str):
         if "\n" in input:
-            # TODO: comment
             lines = input.split("\n")
             body = "".join(f"  {repr(line)},\n" for line in lines)
             return ReprResult(f"'\\n'.join([\n{body}])", complex=True)

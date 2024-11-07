@@ -94,7 +94,7 @@ class _ArrayAdapter(TypeAdapter):
             listuple_class_local,
             "([",
             self.item_adapter.from_json_expr(Expr.join("_e")),
-            " for e in ",
+            " for _e in ",
             json_expr,
             "] or ",
             empty_listuple_local,

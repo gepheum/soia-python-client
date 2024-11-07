@@ -216,7 +216,7 @@ class _BytesAdapter(AbstractPrimitiveAdapter):
 
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
         return Expr.join(
-            Expr.local("fromhex", _BytesAdapter._fromhex_fn), "(", json_expr, ")"
+            Expr.local("fromhex", _BytesAdapter._fromhex_fn), "(", json_expr, ' or "")'
         )
 
 

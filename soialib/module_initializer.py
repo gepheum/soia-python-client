@@ -77,7 +77,6 @@ def init_module(
         else:
             globals[class_name] = gen_class
             gen_class._parent_class = None
-        # TODO: comment
         gen_class.SERIALIZER = make_serializer(adapter)
 
     # Now that al the classes have been initialized, create the methods.

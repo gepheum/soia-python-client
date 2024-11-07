@@ -49,7 +49,6 @@ class TypeAdapter(Protocol):
         """
         ...
 
-    # TODO: comment!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     def finalize(
         self,
         resolve_type_fn: Callable[[spec.Type], "TypeAdapter"],

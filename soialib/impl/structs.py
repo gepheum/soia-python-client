@@ -507,7 +507,7 @@ def _make_repr_fn(fields: Sequence[_Field]) -> Callable[[Any], Any]:
     repr_local = Expr.local("repr", repr_impl)
     for field in fields:
         attribute = field.field.attribute
-        # TODO: comment, is_not_default_expr only works on a frozen expression...
+        # is_not_default_expr only works on a frozen expression.
         to_frozen_expr = field.type.to_frozen_expr(f"(self.{attribute})")
         is_not_default_expr = field.type.is_not_default_expr(
             to_frozen_expr, to_frozen_expr
