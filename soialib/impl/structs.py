@@ -638,7 +638,7 @@ def _make_from_json_fn(
         builder.append_ln(f"    array_len = {field.field.number}")
         builder.append_ln(
             f"    {lvalue} = ",
-            field.type.from_json_expr(Expr.join(f'json["{name}"]')),
+            field.type.from_json_expr(f'json["{name}"]'),
         )
         builder.append_ln("  else:")
         builder.append_ln(f"    {lvalue} = ", field.type.default_expr())

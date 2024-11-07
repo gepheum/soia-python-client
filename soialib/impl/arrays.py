@@ -73,16 +73,13 @@ class _ArrayAdapter(TypeAdapter):
         return attr_expr
 
     def to_json_expr(self, in_expr: ExprLike, readable: bool) -> ExprLike:
-        e = Expr.join("_e")
-        item_to_json = self.item_adapter.to_json_expr(e, readable)
-        if item_to_json == e:
+        item_to_json = self.item_adapter.to_json_expr("_e", readable)
+        if Expr.join(item_to_json) == Expr.join("_e"):
             return in_expr
         return Expr.join(
             "[",
             item_to_json,
-            " for ",
-            e,
-            " in ",
+            " for _e in ",
             in_expr,
             "]",
         )
@@ -93,7 +90,7 @@ class _ArrayAdapter(TypeAdapter):
         return Expr.join(
             listuple_class_local,
             "([",
-            self.item_adapter.from_json_expr(Expr.join("_e")),
+            self.item_adapter.from_json_expr("_e"),
             " for _e in ",
             json_expr,
             "] or ",

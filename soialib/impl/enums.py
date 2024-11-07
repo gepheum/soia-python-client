@@ -292,7 +292,7 @@ def _make_wrap_fn(field: _ValueField) -> Callable[[Any], Any]:
     builder.append_ln(
         Expr.local("setattr", object.__setattr__),
         "(ret, 'value', ",
-        field.field_type.to_frozen_expr(Expr.join("value")),
+        field.field_type.to_frozen_expr("value"),
         ")",
     )
     builder.append_ln("return ret")
@@ -357,7 +357,7 @@ def _make_from_json_fn(
             number = numbers[0]
             field = key_to_field[number]
             value_class_local = Expr.local("cls?", field.value_class)
-            value_expr = field.field_type.from_json_expr(Expr.join("json[1]"))
+            value_expr = field.field_type.from_json_expr("json[1]")
             builder.append_ln(f"{indent}ret = ", value_class_local, "()")
             builder.append_ln(
                 indent, obj_setattr_local, '(ret, "value", ', value_expr, ")"
