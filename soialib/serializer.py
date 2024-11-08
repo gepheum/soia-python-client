@@ -39,7 +39,7 @@ class Serializer(Generic[T]):
         )
         object.__setattr__(self, "_from_json_fn", _make_from_json_fn(adapter))
 
-    def to_json(self, input: T, readable=False) -> Any:
+    def to_json(self, input: T, *, readable=False) -> Any:
         if readable:
             return self._to_readable_json_fn(input)
         else:
