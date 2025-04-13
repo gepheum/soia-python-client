@@ -52,44 +52,72 @@ class _AbstractIntAdapter(AbstractPrimitiveAdapter):
         return "0"
 
     def to_frozen_expr(self, arg_expr: ExprLike) -> Expr:
-        round_expr = Expr.local("round", round)
         # Must accept float inputs and turn them into ints.
-        return Expr.join("(", arg_expr, " | 0)")
+        return Expr.join("(0).__class__(", arg_expr, ")")
 
     def is_not_default_expr(self, arg_expr: ExprLike, attr_expr: ExprLike) -> ExprLike:
         return arg_expr
 
-    def to_json_expr(self, in_expr: ExprLike, readable: bool) -> ExprLike:
-        return in_expr
-
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
-        # Must accept float inputs and turn them into ints.
+        # Must accept float inputs and string inputs and turn them into ints.
         return Expr.join(
-            "(",
+            "(0).__class__(",
             json_expr,
-            " if ",
-            json_expr,
-            ".__class__ is (0).__class__ else ",
-            Expr.local("_round", round),
-            "(",
-            json_expr,
-            "))",
+            ")",
         )
 
 
 @dataclass(frozen=True)
 class _Int32Adapter(_AbstractIntAdapter):
-    pass
+    def to_json_expr(self, in_expr: ExprLike, readable: bool) -> Expr:
+        return Expr.join(
+            "(-2147483648 if ",
+            in_expr,
+            " <= -2147483648 else ",
+            in_expr,
+            " if ",
+            in_expr,
+            " < 2147483647 else 2147483647)",
+        )
+
+
+def _int64_to_json(i: int) -> int | str:
+    if i < -9007199254740991:  # min safe integer in JavaScript
+        if i <= -9223372036854775808:
+            return "-9223372036854775808"
+        else:
+            return str(i)
+    elif i <= 9007199254740991:  # max safe integer in JavaScript
+        return i
+    elif i < 9223372036854775807:
+        return str(i)
+    else:
+        return "9223372036854775807"
 
 
 @dataclass(frozen=True)
 class _Int64Adapter(_AbstractIntAdapter):
-    pass
+    def to_json_expr(self, in_expr: ExprLike, readable: bool) -> Expr:
+        return Expr.join(Expr.local("int64_to_json", _int64_to_json), "(", in_expr, ")")
+
+
+def _uint64_to_json(i: int) -> int | str:
+    if i <= 0:
+        return 0
+    elif i <= 9007199254740991:  # max safe integer in JavaScript
+        return i
+    elif i < 18446744073709551615:
+        return f"{i}"
+    else:
+        return "18446744073709551615"
 
 
 @dataclass(frozen=True)
 class _Uint64Adapter(_AbstractIntAdapter):
-    pass
+    def to_json_expr(self, in_expr: ExprLike, readable: bool) -> Expr:
+        return Expr.join(
+            Expr.local("uint64_to_json", _uint64_to_json), "(", in_expr, ")"
+        )
 
 
 INT32_ADAPTER: Final[TypeAdapter] = _Int32Adapter()

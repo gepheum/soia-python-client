@@ -54,6 +54,7 @@ class Timestamp:
     def __sub__(self, other: datetime.timedelta) -> "Timestamp": ...
     @overload
     def __sub__(self, other: "Timestamp") -> datetime.timedelta: ...
+
     def __sub__(
         self, other: Union["Timestamp", datetime.timedelta]
     ) -> Union["Timestamp", datetime.timedelta]:
@@ -111,7 +112,7 @@ class Timestamp:
     def _iso_format(self) -> str:
         try:
             dt = self.to_datetime_or_raise()
-        except:
+        except Exception:
             return ""
         if dt:
             ret = dt.isoformat()

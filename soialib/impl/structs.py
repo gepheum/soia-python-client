@@ -178,7 +178,7 @@ class StructAdapter(TypeAdapter):
         )
 
     def is_not_default_expr(self, arg_expr: ExprLike, attr_expr: ExprLike) -> Expr:
-        return Expr.join(attr_expr, f"._array_len")
+        return Expr.join(attr_expr, "._array_len")
 
     def to_json_expr(
         self,
@@ -286,7 +286,7 @@ def _make_frozen_class_init_fn(
         # Set array length.
         builder.append_ln(
             obj_setattr,
-            f'(_self, "_array_len", ',
+            '(_self, "_array_len", ',
             array_len_expr(),
             ")",
         )
@@ -311,7 +311,7 @@ def _make_frozen_class_init_fn(
         # Set the _unrecognized field.
         builder.append_ln("_self._unrecognized = ()")
         # Set array length.
-        builder.append_ln(f"_self._array_len = ", array_len_expr())
+        builder.append_ln("_self._array_len = ", array_len_expr())
         # Change back the __class__.
         builder.append_ln("_self.__class__ = ", Expr.local("Frozen", frozen_class))
 
@@ -360,7 +360,7 @@ def _make_to_mutable_fn(
     Returns the implementation of the to_mutable() method of the frozen class.
     """
     builder = BodyBuilder()
-    # Create an instance of the simple class. We'll later change its __class__ attribute.
+    # Create an instance of the simple class. We'll later change its __class__ attr.
     builder.append_ln(
         "ret = ",
         Expr.local("Simple", simple_class),
@@ -392,7 +392,7 @@ def _make_to_frozen_fn(
     """
 
     builder = BodyBuilder()
-    # Create an instance of the simple class. We'll later change its __class__ attribute.
+    # Create an instance of the simple class. We'll later change its __class__ attr.
     builder.append_ln(
         "ret = ",
         Expr.local("Simple", simple_class),
@@ -622,7 +622,7 @@ def _make_from_json_fn(
     )
     builder.append_ln("  else:")
     builder.append_ln(
-        f"    ret._unrecognized = ",
+        "    ret._unrecognized = ",
         Expr.local("deepcopy", copy.deepcopy),
         f"(json[{num_slots}:])",
     )

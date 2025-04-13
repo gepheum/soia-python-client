@@ -87,7 +87,7 @@ class TimestampTestCase(unittest.TestCase):
         try:
             Timestamp.MIN.to_datetime_or_raise()
             self.fail("Expected to fail with OverflowError or ValueError")
-        except Exception as e:
+        except Exception:
             pass
 
     def test_add_timedelta(self):

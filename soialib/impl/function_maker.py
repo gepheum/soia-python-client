@@ -49,12 +49,12 @@ def make_function(
 
     locals = make_locals()
 
-    def line_to_code(l: Union[str, Line]) -> str:
-        if isinstance(l, str):
-            return l
-        return l._to_code(locals)
+    def line_to_code(ln: Union[str, Line]) -> str:
+        if isinstance(ln, str):
+            return ln
+        return ln._to_code(locals)
 
-    body_str = "\n    ".join(line_to_code(l) for l in body) if body else "pass"
+    body_str = "\n    ".join(line_to_code(ln) for ln in body) if body else "pass"
     text = f"""
 def __create_function__({', '.join(locals.locals.keys())}):
   def {name}({', '.join(p._to_code(locals) for p in params)}):
@@ -152,7 +152,7 @@ class BodyBuilder:
         self._lines.append(Line.join(*spans))
 
     def extend(self, other: Iterable[Union[str, Line]], indent: str = ""):
-        self._lines.extend(Line.join(indent, l) for l in other)
+        self._lines.extend(Line.join(indent, ln) for ln in other)
         return self
 
     def build(self) -> Body:

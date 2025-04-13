@@ -1,1 +1,5 @@
 python3 -m unittest tests/**.py
+
+pyright
+flake8
+black-formatter

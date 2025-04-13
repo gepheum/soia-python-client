@@ -1,4 +1,4 @@
-from typing import Final, Literal, Optional, TypeVar, overload
+from typing import Final, Literal, TypeVar, overload
 
 from soialib.impl import primitives
 from soialib.impl.arrays import get_array_adapter
@@ -38,6 +38,8 @@ def primitive_serializer(primitive: Literal["timestamp"]) -> Serializer[Timestam
 def primitive_serializer(primitive: Literal["string"]) -> Serializer[str]: ...
 @overload
 def primitive_serializer(primitive: Literal["bytes"]) -> Serializer[bytes]: ...
+
+
 def primitive_serializer(
     primitive: (
         Literal["bool"]
