@@ -118,14 +118,14 @@ def _new_listuple_class() -> type:
     return Listuple
 
 
-def _new_keyed_items_class(attributes: tuple[str, ...], default_expr: ExprLike):
+def _new_keyed_items_class(key_attributes: tuple[str, ...], default_expr: ExprLike):
     key_items = make_function(
         name="key_items",
         params=["items"],
         body=[
             "ret = {}",
             "for item in items:",
-            f"  ret[item.{'.'.join(attributes)}] = item",
+            f"  ret[item.{'.'.join(key_attributes)}] = item",
             "return ret",
         ],
     )

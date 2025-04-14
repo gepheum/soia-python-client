@@ -295,6 +295,21 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     ),
                 ),
                 spec.Struct(
+                    id="my/module.soia:Rec",
+                    fields=(
+                        spec.Field(
+                            name="r",
+                            number=0,
+                            type="my/module.soia:Rec",
+                        ),
+                        spec.Field(
+                            name="x",
+                            number=1,
+                            type=spec.PrimitiveType.INT32,
+                        ),
+                    ),
+                ),
+                spec.Struct(
                     id="my/module.soia:Foobar",
                     fields=(
                         spec.Field(
@@ -529,6 +544,14 @@ class ModuleInitializerTestCase(unittest.TestCase):
         foobar = foobar_cls(point=point_cls(x=2))
         self.assertEqual(serializer.to_json_code(foobar), "[0,0,0,0,[2.0]]")
         self.assertEqual(serializer.from_json_code("[0,0,0,0,[2.0]]"), foobar)
+
+    def test_recursive_struct(self):
+        rec_cls = self.init_test_module()["Rec"]
+        r = rec_cls(r=rec_cls(r=rec_cls.DEFAULT, x=1))
+        serializer = rec_cls.SERIALIZER
+        self.assertEqual(serializer.to_json_code(r), "[[[],1]]")
+        self.assertEqual(serializer.from_json_code("[[[],1]]"), r)
+        self.assertEqual(str(r), "Rec(\n  r=Rec(x=1),\n)")
 
     def test_struct_ctor_accepts_mutable_struct(self):
         module = self.init_test_module()

@@ -457,6 +457,8 @@ def _make_eq_fn(
     """
 
     builder = BodyBuilder()
+    builder.append_ln("if other is self:")
+    builder.append_ln("  return True")
     builder.append_ln("if other.__class__ is self.__class__:")
     operands: list[ExprLike]
     if fields:
