@@ -441,7 +441,6 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
     def test_primitives_repr(self):
         primitives_cls = self.init_test_module()["Primitives"]
-        serializer = primitives_cls.SERIALIZER
         p = primitives_cls(
             bool=True,
             bytes=b"a",
@@ -469,7 +468,6 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
     def test_cannot_mutate_frozen_class(self):
         point_cls = self.init_test_module()["Point"]
-        serializer = point_cls.SERIALIZER
         point = point_cls(x=1.5, y=2.5)
         try:
             point.x = 3.5
@@ -585,6 +583,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
     def test_struct_ctor_raises_error_if_unknown_arg(self):
         module = self.init_test_module()
         segment_cls = module["Segment"]
+        try:
+            segment_cls(foo=4)
+            self.fail("Expected to fail")
+        except Exception:
+            pass
 
     def test_to_frozen_checks_type_of_struct_field(self):
         module = self.init_test_module()
