@@ -13,7 +13,7 @@ class ServiceClient:
     _host: Final[str]  # May include the port
     _path: Final[str]
 
-    def __init__(self, service_url: str, use_https: bool = False):
+    def __init__(self, service_url: str):
         parsed_url = urlparse(service_url)
         if parsed_url.query:
             raise ValueError("Service URL must not contain a query string")
