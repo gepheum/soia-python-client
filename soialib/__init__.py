@@ -6,12 +6,14 @@ from soialib.serializers import (
     optional_serializer,
     primitive_serializer,
 )
+from soialib.service_client import ServiceClient
 from soialib.timestamp import Timestamp
 
 __all__ = [
     "KeyedItems",
     "Method",
     "Serializer",
+    "ServiceClient",
     "Timestamp",
     "array_serializer",
     "optional_serializer",
