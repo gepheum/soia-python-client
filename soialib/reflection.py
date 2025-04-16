@@ -110,7 +110,7 @@ class _Serializer(Generic[_T]):
 
 
 @dataclass(frozen=True)
-class _FieldSerializer[_T]:
+class _FieldSerializer(Generic[_T]):
     name: str
     serializer: _Serializer[_T]
     default: Optional[_T] = None
