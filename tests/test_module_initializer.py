@@ -6,6 +6,7 @@ from soialib import spec
 from soialib.keyed_items import KeyedItems
 from soialib.method import Method
 from soialib.module_initializer import init_module
+from soialib.reflection import TypeDescriptor
 from soialib.timestamp import Timestamp
 
 
@@ -96,12 +97,12 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         spec.Field(
                             name="i64",
                             number=5,
-                            type=spec.PrimitiveType.INT32,
+                            type=spec.PrimitiveType.INT64,
                         ),
                         spec.Field(
                             name="u64",
                             number=6,
-                            type=spec.PrimitiveType.INT32,
+                            type=spec.PrimitiveType.UINT64,
                         ),
                         spec.Field(
                             name="s",
@@ -1119,3 +1120,249 @@ class ModuleInitializerTestCase(unittest.TestCase):
         c = module["C"]
         Point = module["Point"]
         self.assertEqual(c, Point(x=1.5, y=2.5))
+
+    def test_enum_type_descriptor(self):
+        module = self.init_test_module()
+        json_value_cls = module["JsonValue"]
+        type_descriptor = json_value_cls.SERIALIZER.type_descriptor
+        self.assertEqual(
+            type_descriptor.as_json(),
+            {
+                "type": {"kind": "record", "value": "my/module.soia:JsonValue"},
+                "records": [
+                    {
+                        "kind": "enum",
+                        "id": "my/module.soia:JsonValue",
+                        "fields": [
+                            {
+                                "name": "bool",
+                                "type": {"kind": "primitive", "value": "bool"},
+                                "number": 2,
+                            },
+                            {
+                                "name": "number",
+                                "type": {"kind": "primitive", "value": "float64"},
+                                "number": 3,
+                            },
+                            {
+                                "name": "string",
+                                "type": {"kind": "primitive", "value": "string"},
+                                "number": 4,
+                            },
+                            {
+                                "name": "array",
+                                "type": {
+                                    "kind": "array",
+                                    "value": {
+                                        "item": {
+                                            "kind": "record",
+                                            "value": "my/module.soia:JsonValue",
+                                        },
+                                    },
+                                },
+                                "number": 5,
+                            },
+                            {
+                                "name": "object",
+                                "type": {
+                                    "kind": "record",
+                                    "value": "my/module.soia:JsonValue.Object",
+                                },
+                                "number": 6,
+                            },
+                        ],
+                        "removed_fields": [100, 101],
+                    },
+                    {
+                        "kind": "struct",
+                        "id": "my/module.soia:JsonValue.Object",
+                        "fields": [
+                            {
+                                "name": "entries",
+                                "type": {
+                                    "kind": "array",
+                                    "value": {
+                                        "item": {
+                                            "kind": "record",
+                                            "value": "my/module.soia:JsonValue.ObjectEntry",
+                                        },
+                                        "key_chain": ["name"],
+                                    },
+                                },
+                                "number": 0,
+                            }
+                        ],
+                    },
+                    {
+                        "kind": "struct",
+                        "id": "my/module.soia:JsonValue.ObjectEntry",
+                        "fields": [
+                            {
+                                "name": "name",
+                                "type": {"kind": "primitive", "value": "string"},
+                                "number": 0,
+                            },
+                            {
+                                "name": "value",
+                                "type": {
+                                    "kind": "record",
+                                    "value": "my/module.soia:JsonValue",
+                                },
+                                "number": 1,
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+        self.assertEqual(
+            str(TypeDescriptor.from_json(type_descriptor.as_json())),
+            str(type_descriptor),
+        )
+        self.assertEqual(
+            TypeDescriptor.from_json(type_descriptor.as_json()),
+            type_descriptor,
+        )
+
+    def test_optional_type_descriptor(self):
+        module = self.init_test_module()
+        segment_cls = module["Segment"]
+        type_descriptor = segment_cls.SERIALIZER.type_descriptor
+        self.assertEqual(
+            type_descriptor.as_json(),
+            {
+                "type": {"kind": "record", "value": "my/module.soia:Segment"},
+                "records": [
+                    {
+                        "kind": "struct",
+                        "id": "my/module.soia:Segment",
+                        "fields": [
+                            {
+                                "name": "a",
+                                "type": {
+                                    "kind": "record",
+                                    "value": "my/module.soia:Point",
+                                },
+                                "number": 0,
+                            },
+                            {
+                                "name": "bb",
+                                "type": {
+                                    "kind": "record",
+                                    "value": "my/module.soia:Point",
+                                },
+                                "number": 1,
+                            },
+                            {
+                                "name": "c",
+                                "type": {
+                                    "kind": "optional",
+                                    "value": {
+                                        "kind": "record",
+                                        "value": "my/module.soia:Point",
+                                    },
+                                },
+                                "number": 2,
+                            },
+                        ],
+                    },
+                    {
+                        "kind": "struct",
+                        "id": "my/module.soia:Point",
+                        "fields": [
+                            {
+                                "name": "x",
+                                "type": {"kind": "primitive", "value": "float32"},
+                                "number": 0,
+                            },
+                            {
+                                "name": "y",
+                                "type": {"kind": "primitive", "value": "float32"},
+                                "number": 2,
+                            },
+                        ],
+                        "removed_fields": [1],
+                    },
+                ],
+            },
+        )
+        self.assertEqual(
+            str(TypeDescriptor.from_json(type_descriptor.as_json())),
+            str(type_descriptor),
+        )
+        self.assertEqual(
+            TypeDescriptor.from_json(type_descriptor.as_json()),
+            type_descriptor,
+        )
+
+    def test_primitive_type_descriptor(self):
+        module = self.init_test_module()
+        segment_cls = module["Primitives"]
+        type_descriptor = segment_cls.SERIALIZER.type_descriptor
+        self.assertEqual(
+            type_descriptor.as_json(),
+            {
+                "type": {"kind": "record", "value": "my/module.soia:Primitives"},
+                "records": [
+                    {
+                        "kind": "struct",
+                        "id": "my/module.soia:Primitives",
+                        "fields": [
+                            {
+                                "name": "bool",
+                                "type": {"kind": "primitive", "value": "bool"},
+                                "number": 0,
+                            },
+                            {
+                                "name": "bytes",
+                                "type": {"kind": "primitive", "value": "bytes"},
+                                "number": 1,
+                            },
+                            {
+                                "name": "f32",
+                                "type": {"kind": "primitive", "value": "float32"},
+                                "number": 2,
+                            },
+                            {
+                                "name": "f64",
+                                "type": {"kind": "primitive", "value": "float64"},
+                                "number": 3,
+                            },
+                            {
+                                "name": "i32",
+                                "type": {"kind": "primitive", "value": "int32"},
+                                "number": 4,
+                            },
+                            {
+                                "name": "i64",
+                                "type": {"kind": "primitive", "value": "int64"},
+                                "number": 5,
+                            },
+                            {
+                                "name": "u64",
+                                "type": {"kind": "primitive", "value": "uint64"},
+                                "number": 6,
+                            },
+                            {
+                                "name": "s",
+                                "type": {"kind": "primitive", "value": "string"},
+                                "number": 7,
+                            },
+                            {
+                                "name": "t",
+                                "type": {"kind": "primitive", "value": "timestamp"},
+                                "number": 8,
+                            },
+                        ],
+                    }
+                ],
+            },
+        )
+        self.assertEqual(
+            str(TypeDescriptor.from_json(type_descriptor.as_json())),
+            str(type_descriptor),
+        )
+        self.assertEqual(
+            TypeDescriptor.from_json(type_descriptor.as_json()),
+            type_descriptor,
+        )

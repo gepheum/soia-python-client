@@ -3,6 +3,7 @@ from dataclasses import FrozenInstanceError
 from typing import Generic, Optional
 from weakref import WeakValueDictionary
 
+import soialib.reflection
 from soialib import spec
 from soialib.impl.function_maker import Any, Expr, ExprLike, Line, make_function
 from soialib.impl.type_adapter import TypeAdapter
@@ -18,7 +19,7 @@ def get_array_adapter(
         listuple_class = _new_keyed_items_class(key_attributes, default_expr)
     else:
         listuple_class = _new_listuple_class()
-    array_adapter = _ArrayAdapter(item_adapter, listuple_class)
+    array_adapter = _ArrayAdapter(item_adapter, listuple_class, key_attributes)
     return _item_to_array_adapter.setdefault(
         (item_adapter, key_attributes), array_adapter
     )
@@ -28,6 +29,7 @@ class _ArrayAdapter(TypeAdapter):
     __slots__ = (
         "item_adapter",
         "listuple_class",
+        "key_attributes",
         "empty_listuple",
     )
 
@@ -39,9 +41,11 @@ class _ArrayAdapter(TypeAdapter):
         self,
         item_adapter: TypeAdapter,
         listuple_class: type,
+        key_attributes: tuple[str, ...],
     ):
         self.item_adapter = item_adapter
         self.listuple_class = listuple_class
+        self.key_attributes = key_attributes
         self.empty_listuple = listuple_class()
 
     def default_expr(self) -> ExprLike:
@@ -103,6 +107,21 @@ class _ArrayAdapter(TypeAdapter):
         resolve_type_fn: Callable[[spec.Type], "TypeAdapter"],
     ) -> None:
         self.item_adapter.finalize(resolve_type_fn)
+
+    def get_type(self) -> soialib.reflection.Type:
+        return soialib.reflection.ArrayType(
+            kind="array",
+            value=soialib.reflection.ArrayType.Array(
+                item=self.item_adapter.get_type(),
+                key_chain=self.key_attributes,
+            ),
+        )
+
+    def register_records(
+        self,
+        registry: dict[str, soialib.reflection.Record],
+    ) -> None:
+        self.item_adapter.register_records(registry)
 
 
 _ItemAndKeyAttributes = tuple[TypeAdapter, tuple[str, ...]]

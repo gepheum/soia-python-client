@@ -3,6 +3,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
 from typing import Any, Final, Union, cast
 
+import soialib.reflection
 from soialib import spec as _spec
 from soialib.impl.function_maker import (
     BodyBuilder,
@@ -28,6 +29,7 @@ class StructAdapter(TypeAdapter):
         "simple_class",
         "private_is_frozen_attr",
         "finalization_state",
+        "fields",
     )
 
     spec: Final[_spec.Struct]
@@ -40,6 +42,7 @@ class StructAdapter(TypeAdapter):
 
     # 0: has not started; 1: in progress; 2: done
     finalization_state: int
+    fields: tuple["_Field", ...]
 
     def __init__(self, spec: _spec.Struct):
         self.finalization_state = 0
@@ -90,7 +93,7 @@ class StructAdapter(TypeAdapter):
         self.finalization_state = 1
 
         # Resolve the type of every field.
-        fields = tuple(
+        self.fields = fields = tuple(
             sorted(
                 (_Field(f, resolve_type_fn(f.type)) for f in self.spec.fields),
                 key=lambda f: f.field.number,
@@ -197,6 +200,35 @@ class StructAdapter(TypeAdapter):
             return Expr.join(
                 Expr.local("_cls?", self.gen_class), f".{fn_name}(", json_expr, ")"
             )
+
+    def get_type(self) -> soialib.reflection.Type:
+        return soialib.reflection.RecordType(
+            kind="record",
+            value=self.spec.id,
+        )
+
+    def register_records(
+        self,
+        registry: dict[str, soialib.reflection.Record],
+    ) -> None:
+        record_id = self.spec.id
+        if record_id in registry:
+            return
+        registry[record_id] = soialib.reflection.Record(
+            kind="struct",
+            id=record_id,
+            fields=tuple(
+                soialib.reflection.Field(
+                    name=field.field.name,
+                    number=field.field.number,
+                    type=field.type.get_type(),
+                )
+                for field in self.fields
+            ),
+            removed_fields=self.spec.removed_numbers,
+        )
+        for field in self.fields:
+            field.type.register_records(registry)
 
 
 class _Frozen:

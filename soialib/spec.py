@@ -18,7 +18,6 @@ class PrimitiveType(enum.Enum):
 @dataclass(frozen=True)
 class ArrayType:
     item: "Type"
-    # TODO: comment
     key_attributes: tuple[str, ...] = ()
 
 
@@ -27,7 +26,6 @@ class OptionalType:
     other: "Type"
 
 
-# TODO: comment
 Type = Union[PrimitiveType, ArrayType, OptionalType, str]
 
 

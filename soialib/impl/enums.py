@@ -3,6 +3,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
 from typing import Any, Final, Union
 
+import soialib.reflection
 from soialib import spec as _spec
 from soialib.impl.function_maker import BodyBuilder, Expr, ExprLike, Line, make_function
 from soialib.impl.repr import repr_impl
@@ -15,6 +16,7 @@ class EnumAdapter(TypeAdapter):
         "gen_class",
         "private_is_enum_attr",
         "finalization_state",
+        "value_fields",
     )
 
     spec: Final[_spec.Enum]
@@ -22,6 +24,7 @@ class EnumAdapter(TypeAdapter):
     private_is_enum_attr: Final[str]
     # 0: has not started; 1: in progress; 2: done
     finalization_state: int
+    value_fields: tuple["_ValueField", ...]
 
     def __init__(self, spec: _spec.Enum):
         self.finalization_state = 0
@@ -51,10 +54,10 @@ class EnumAdapter(TypeAdapter):
         base_class = self.gen_class
 
         # Resolve the type of every value field.
-        value_fields = [
+        self.value_fields = value_fields = tuple(
             _make_value_field(f, resolve_type_fn(f.type), base_class)
             for f in self.spec.value_fields
-        ]
+        )
 
         # Aim to have dependencies finalized *before* the dependent. It's not always
         # possible, because there can be cyclic dependencies.
@@ -115,6 +118,35 @@ class EnumAdapter(TypeAdapter):
             return Expr.join(
                 Expr.local("_cls?", self.gen_class), f".{fn_name}(", json_expr, ")"
             )
+
+    def get_type(self) -> soialib.reflection.Type:
+        return soialib.reflection.RecordType(
+            kind="record",
+            value=self.spec.id,
+        )
+
+    def register_records(
+        self,
+        registry: dict[str, soialib.reflection.Record],
+    ) -> None:
+        record_id = self.spec.id
+        if record_id in registry:
+            return
+        registry[record_id] = soialib.reflection.Record(
+            kind="enum",
+            id=record_id,
+            fields=tuple(
+                soialib.reflection.Field(
+                    name=field.spec.name,
+                    number=field.spec.number,
+                    type=field.field_type.get_type(),
+                )
+                for field in self.value_fields
+            ),
+            removed_fields=self.spec.removed_numbers,
+        )
+        for field in self.value_fields:
+            field.field_type.register_records(registry)
 
 
 def _make_base_class(spec: _spec.Enum) -> type:

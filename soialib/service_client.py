@@ -1,11 +1,9 @@
 import http.client
-from typing import Final, Mapping, TypeVar
+from typing import Final, Mapping
 from urllib.parse import urlparse
 
 from soialib import Method
-
-Request = TypeVar("Request")
-Response = TypeVar("Response")
+from soialib.method import Request, Response
 
 
 class ServiceClient:

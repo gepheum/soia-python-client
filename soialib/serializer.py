@@ -1,9 +1,11 @@
 import json as jsonlib
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError
+from functools import cached_property
 from typing import Any, Generic, TypeVar, cast, final
 from weakref import WeakValueDictionary
 
+import soialib.reflection
 from soialib.impl.function_maker import Expr, LineSpan, make_function
 from soialib.impl.type_adapter import TypeAdapter
 from soialib.never import Never
@@ -19,6 +21,7 @@ class Serializer(Generic[T]):
         "_to_dense_json_fn",
         "_to_readable_json_fn",
         "_from_json_fn",
+        "__dict__",
     )
 
     _adapter: TypeAdapter
@@ -56,6 +59,15 @@ class Serializer(Generic[T]):
 
     def from_json_code(self, json_code: str) -> T:
         return self._from_json_fn(jsonlib.loads(json_code))
+
+    @cached_property
+    def type_descriptor(self) -> soialib.reflection.TypeDescriptor:
+        records: dict[str, soialib.reflection.Record] = {}
+        self._adapter.register_records(records)
+        return soialib.reflection.TypeDescriptor(
+            type=self._adapter.get_type(),
+            records=tuple(records.values()),
+        )
 
     def __setattr__(self, name: str, value: Any):
         raise FrozenInstanceError(self.__class__.__qualname__)

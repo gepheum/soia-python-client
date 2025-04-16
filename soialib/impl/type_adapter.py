@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from typing import Protocol
 
+import soialib.reflection
 from soialib import spec
 from soialib.impl.function_maker import ExprLike
 
@@ -52,4 +53,11 @@ class TypeAdapter(Protocol):
     def finalize(
         self,
         resolve_type_fn: Callable[[spec.Type], "TypeAdapter"],
+    ) -> None: ...
+
+    def get_type(self) -> soialib.reflection.Type: ...
+
+    def register_records(
+        self,
+        registry: dict[str, soialib.reflection.Record],
     ) -> None: ...
