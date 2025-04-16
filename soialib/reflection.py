@@ -201,12 +201,15 @@ def _forwarding_serializer(
 # ==============================================================================
 
 
+_TYPE_SERIALIZER: Final[_Serializer[Type]]
+
+
 def _type_serializer() -> _Serializer[Type]:
     global _TYPE_SERIALIZER
     return _TYPE_SERIALIZER
 
 
-_TYPE_SERIALIZER: Final = _union_serializer(
+_TYPE_SERIALIZER = _union_serializer(
     {
         "primitive": _dataclass_serializer(
             PrimitiveType,
