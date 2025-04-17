@@ -12,6 +12,9 @@ ResponseHeaders: TypeAlias = dict[str, str]
 class ServiceImpl:
     _number_to_method_impl: dict[int, "_MethodImpl"]
 
+    def __init__(self):
+        self._number_to_method_impl = {}
+
     def add_method(
         self,
         method: Method[Request, Response],
