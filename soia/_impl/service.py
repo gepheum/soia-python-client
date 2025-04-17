@@ -1,11 +1,15 @@
 import inspect
 import json
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Literal, Mapping, TypeAlias, Union, cast
+from typing import Any, Callable, Generic, Literal, Protocol, TypeAlias, Union, cast
 
 from soia._impl.method import Method, Request, Response
 
-RequestHeaders: TypeAlias = Mapping[str, str]
+
+class RequestHeaders(Protocol):
+    def __getitem__(self, key: str, /) -> str | None: ...
+
+
 ResponseHeaders: TypeAlias = dict[str, str]
 
 
