@@ -14,6 +14,34 @@ ResponseHeaders: TypeAlias = dict[str, str]
 
 
 class Service:
+    """Wraps around the implementation of a soia service on the server side.
+
+    Usage: call '.add_method()' to register method implementations, then call
+    '.handle_request()' from the function called by your web framework when an
+    HTTP request is sent to your service's URL.
+
+    Example with Flask:
+
+        from flask import Response, request
+
+        soia_service = soia.Service()
+        soia_service.add_method(...)
+        soia_service.add_method(...)
+
+        @app.route("/myapi", methods=["GET", "POST"])
+        def myapi():
+            if request.method == "POST":
+                req_body = request.get_data(as_text=True)
+            else:
+                req_body = urllib.parse.unquote(request.query_string.decode("utf-8"))
+            raw_response = soia_service.handle_request(req_body, request.headers, {})
+            return Response(
+                raw_response.data,
+                status=raw_response.status_code,
+                content_type=raw_response.content_type,
+            )
+    """
+
     _number_to_method_impl: dict[int, "_MethodImpl"]
 
     def __init__(self):

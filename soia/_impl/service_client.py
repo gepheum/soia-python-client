@@ -1,5 +1,5 @@
 import http.client
-from typing import Final, Mapping
+from typing import Any, Final, Mapping
 from urllib.parse import urlparse
 
 from soia._impl.method import Method, Request, Response
@@ -10,8 +10,8 @@ class ServiceClient:
     _host: Final[str]  # May include the port
     _path: Final[str]
 
-    def __init__(self, service_url: str):
-        parsed_url = urlparse(service_url)
+    def __init__(self, url: str):
+        parsed_url = urlparse(url)
         if parsed_url.query:
             raise ValueError("Service URL must not contain a query string")
         scheme = parsed_url.scheme
@@ -26,7 +26,12 @@ class ServiceClient:
         method: Method[Request, Response],
         request: Request,
         headers: Mapping[str, str] = {},
+        *,
+        res_headers: list[tuple[str, str]] | None = None,
+        timeout_secs: float | None = None,
     ) -> Response:
+        """Invokes the given method on the remote server through an RPC."""
+
         request_json = method.request_serializer.to_json_code(request)
         body = ":".join(
             [
@@ -41,10 +46,13 @@ class ServiceClient:
             "Content-Type": "text/plain; charset=utf-8",
             "Content-Length": str(len(body)),
         }
+        connection_options: dict[str, Any] = {}
+        if timeout_secs is not None:
+            connection_options["timeout"] = timeout_secs
         if self._scheme == "https":
-            conn = http.client.HTTPSConnection(self._host)
+            conn = http.client.HTTPSConnection(self._host, **connection_options)
         else:
-            conn = http.client.HTTPConnection(self._host)
+            conn = http.client.HTTPConnection(self._host, **connection_options)
         try:
             conn.request(
                 "POST",
@@ -53,6 +61,9 @@ class ServiceClient:
                 headers=headers,
             )
             response = conn.getresponse()
+            if res_headers is not None:
+                res_headers.clear()
+                res_headers.extend(response.getheaders())
             status_code = response.status
             content_type = response.getheader("Content-Type")
             response_data = response.read().decode("utf-8", errors="ignore")
