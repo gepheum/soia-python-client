@@ -6,13 +6,17 @@ from soialib.serializers import (
     optional_serializer,
     primitive_serializer,
 )
+from soialib.service import RequestHeaders, ResponseHeaders, ServiceImpl
 from soialib.service_client import ServiceClient
 from soialib.timestamp import Timestamp
 
 __all__ = [
     "KeyedItems",
     "Method",
+    "RequestHeaders",
+    "ResponseHeaders",
     "Serializer",
+    "ServiceImpl",
     "ServiceClient",
     "Timestamp",
     "array_serializer",
