@@ -3,11 +3,11 @@ from dataclasses import FrozenInstanceError
 from typing import Generic, Optional
 from weakref import WeakValueDictionary
 
-import soialib.reflection
-from soialib import spec
-from soialib.impl.function_maker import Any, Expr, ExprLike, Line, make_function
-from soialib.impl.type_adapter import TypeAdapter
-from soialib.keyed_items import Item, Key, KeyedItems
+from soia._impl.function_maker import Any, Expr, ExprLike, Line, make_function
+from soia._impl.keyed_items import Item, Key, KeyedItems
+from soia._impl.type_adapter import TypeAdapter
+
+from soia import _spec, reflection
 
 
 def get_array_adapter(
@@ -104,14 +104,14 @@ class _ArrayAdapter(TypeAdapter):
 
     def finalize(
         self,
-        resolve_type_fn: Callable[[spec.Type], "TypeAdapter"],
+        resolve_type_fn: Callable[[_spec.Type], "TypeAdapter"],
     ) -> None:
         self.item_adapter.finalize(resolve_type_fn)
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.ArrayType(
+    def get_type(self) -> reflection.Type:
+        return reflection.ArrayType(
             kind="array",
-            value=soialib.reflection.ArrayType.Array(
+            value=reflection.ArrayType.Array(
                 item=self.item_adapter.get_type(),
                 key_chain=self.key_attributes,
             ),
@@ -119,7 +119,7 @@ class _ArrayAdapter(TypeAdapter):
 
     def register_records(
         self,
-        registry: dict[str, soialib.reflection.Record],
+        registry: dict[str, reflection.Record],
     ) -> None:
         self.item_adapter.register_records(registry)
 

@@ -2,12 +2,10 @@ import dataclasses
 import unittest
 from typing import Any
 
-from soialib import spec
-from soialib.keyed_items import KeyedItems
-from soialib.method import Method
-from soialib.module_initializer import init_module
-from soialib.reflection import TypeDescriptor
-from soialib.timestamp import Timestamp
+from soia._module_initializer import init_module
+from soia.reflection import TypeDescriptor
+
+from soia import KeyedItems, Method, Timestamp, _spec
 
 
 class ModuleInitializerTestCase(unittest.TestCase):
@@ -15,182 +13,182 @@ class ModuleInitializerTestCase(unittest.TestCase):
         globals: dict[str, Any] = {}
         init_module(
             records=(
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:Point",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="x",
                             number=0,
-                            type=spec.PrimitiveType.FLOAT32,
+                            type=_spec.PrimitiveType.FLOAT32,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="y",
                             number=2,
-                            type=spec.PrimitiveType.FLOAT32,
+                            type=_spec.PrimitiveType.FLOAT32,
                         ),
                     ),
                     removed_numbers=(1,),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:Segment",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="a",
                             number=0,
                             type="my/module.soia:Point",
                             has_mutable_getter=True,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="bb",
                             _attribute="b",
                             number=1,
                             type="my/module.soia:Point",
                             has_mutable_getter=True,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="c",
                             number=2,
-                            type=spec.OptionalType("my/module.soia:Point"),
+                            type=_spec.OptionalType("my/module.soia:Point"),
                             has_mutable_getter=True,
                         ),
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:Shape",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="points",
                             number=0,
-                            type=spec.ArrayType("my/module.soia:Point"),
+                            type=_spec.ArrayType("my/module.soia:Point"),
                             has_mutable_getter=True,
                         ),
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:Primitives",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="bool",
                             number=0,
-                            type=spec.PrimitiveType.BOOL,
+                            type=_spec.PrimitiveType.BOOL,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="bytes",
                             number=1,
-                            type=spec.PrimitiveType.BYTES,
+                            type=_spec.PrimitiveType.BYTES,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="f32",
                             number=2,
-                            type=spec.PrimitiveType.FLOAT32,
+                            type=_spec.PrimitiveType.FLOAT32,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="f64",
                             number=3,
-                            type=spec.PrimitiveType.FLOAT64,
+                            type=_spec.PrimitiveType.FLOAT64,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="i32",
                             number=4,
-                            type=spec.PrimitiveType.INT32,
+                            type=_spec.PrimitiveType.INT32,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="i64",
                             number=5,
-                            type=spec.PrimitiveType.INT64,
+                            type=_spec.PrimitiveType.INT64,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="u64",
                             number=6,
-                            type=spec.PrimitiveType.UINT64,
+                            type=_spec.PrimitiveType.UINT64,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="s",
                             number=7,
-                            type=spec.PrimitiveType.STRING,
+                            type=_spec.PrimitiveType.STRING,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="t",
                             number=8,
-                            type=spec.PrimitiveType.TIMESTAMP,
+                            type=_spec.PrimitiveType.TIMESTAMP,
                         ),
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:After",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="points",
                             number=0,
-                            type=spec.ArrayType("my/module.soia:Point"),
+                            type=_spec.ArrayType("my/module.soia:Point"),
                             has_mutable_getter=True,
                         ),
                     ),
                 ),
-                spec.Enum(
+                _spec.Enum(
                     id="my/module.soia:PrimaryColor",
                     constant_fields=(
-                        spec.ConstantField(
+                        _spec.ConstantField(
                             name="RED",
                             number=10,
                         ),
-                        spec.ConstantField(
+                        _spec.ConstantField(
                             name="GREEN",
                             number=20,
                         ),
-                        spec.ConstantField(
+                        _spec.ConstantField(
                             name="BLUE",
                             number=30,
                         ),
                     ),
                 ),
-                spec.Enum(
+                _spec.Enum(
                     id="my/module.soia:Status",
                     constant_fields=(
-                        spec.ConstantField(
+                        _spec.ConstantField(
                             name="OK",
                             number=1,
                         ),
                     ),
                     value_fields=(
-                        spec.ValueField(
+                        _spec.ValueField(
                             name="error",
                             number=2,
-                            type=spec.PrimitiveType.STRING,
+                            type=_spec.PrimitiveType.STRING,
                         ),
                     ),
                     removed_numbers=(1, 4),
                 ),
-                spec.Enum(
+                _spec.Enum(
                     id="my/module.soia:JsonValue",
                     constant_fields=(
-                        spec.ConstantField(
+                        _spec.ConstantField(
                             name="NULL",
                             number=1,
                         ),
                     ),
                     value_fields=(
-                        spec.ValueField(
+                        _spec.ValueField(
                             name="bool",
                             number=2,
-                            type=spec.PrimitiveType.BOOL,
+                            type=_spec.PrimitiveType.BOOL,
                         ),
-                        spec.ValueField(
+                        _spec.ValueField(
                             name="number",
                             number=3,
-                            type=spec.PrimitiveType.FLOAT64,
+                            type=_spec.PrimitiveType.FLOAT64,
                         ),
-                        spec.ValueField(
+                        _spec.ValueField(
                             name="string",
                             number=4,
-                            type=spec.PrimitiveType.STRING,
+                            type=_spec.PrimitiveType.STRING,
                         ),
-                        spec.ValueField(
+                        _spec.ValueField(
                             name="array",
                             number=5,
-                            type=spec.ArrayType("my/module.soia:JsonValue"),
+                            type=_spec.ArrayType("my/module.soia:JsonValue"),
                         ),
-                        spec.ValueField(
+                        _spec.ValueField(
                             name="object",
                             number=6,
                             type="my/module.soia:JsonValue.Object",
@@ -201,48 +199,48 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         101,
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:JsonValue.Object",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="entries",
                             number=0,
-                            type=spec.ArrayType(
+                            type=_spec.ArrayType(
                                 item="my/module.soia:JsonValue.ObjectEntry",
                                 key_attributes=("name",),
                             ),
                         ),
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:JsonValue.ObjectEntry",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="name",
                             number=0,
-                            type=spec.PrimitiveType.STRING,
+                            type=_spec.PrimitiveType.STRING,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="value",
                             number=1,
                             type="my/module.soia:JsonValue",
                         ),
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:Parent",
                     fields=(),
                 ),
-                spec.Enum(
+                _spec.Enum(
                     id="my/module.soia:Parent.NestedEnum",
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:Stuff",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="enum_wrappers",
                             number=0,
-                            type=spec.ArrayType(
+                            type=_spec.ArrayType(
                                 item="my/module.soia:EnumWrapper",
                                 key_attributes=(
                                     "status",
@@ -252,78 +250,78 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         ),
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:EnumWrapper",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="status",
                             number=0,
                             type="my/module.soia:Status",
                         ),
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:Stuff.Overrides",
                     _class_name="NameOverrides",
                     _class_qualname="Stuff.NameOverrides",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="x",
                             _attribute="y",
                             number=0,
-                            type=spec.PrimitiveType.INT32,
+                            type=_spec.PrimitiveType.INT32,
                         ),
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:RecOuter",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="r",
                             number=0,
                             type="my/module.soia:RecOuter.RecInner",
                         ),
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:RecOuter.RecInner",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="r",
                             number=0,
                             type="my/module.soia:RecOuter",
                         ),
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:Rec",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="r",
                             number=0,
                             type="my/module.soia:Rec",
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="x",
                             number=1,
-                            type=spec.PrimitiveType.INT32,
+                            type=_spec.PrimitiveType.INT32,
                         ),
                     ),
                 ),
-                spec.Struct(
+                _spec.Struct(
                     id="my/module.soia:Foobar",
                     fields=(
-                        spec.Field(
+                        _spec.Field(
                             name="a",
                             number=1,
-                            type=spec.PrimitiveType.INT32,
+                            type=_spec.PrimitiveType.INT32,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="b",
                             number=3,
-                            type=spec.PrimitiveType.INT32,
+                            type=_spec.PrimitiveType.INT32,
                         ),
-                        spec.Field(
+                        _spec.Field(
                             name="point",
                             number=4,
                             type="my/module.soia:Point",
@@ -333,13 +331,13 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 ),
             ),
             methods=(
-                spec.Method(
+                _spec.Method(
                     name="FirstMethod",
                     number=-300,
                     request_type="my/module.soia:Point",
                     response_type="my/module.soia:Shape",
                 ),
-                spec.Method(
+                _spec.Method(
                     name="SecondMethod",
                     number=-301,
                     request_type="my/module.soia:Point",
@@ -348,7 +346,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 ),
             ),
             constants=(
-                spec.Constant(
+                _spec.Constant(
                     name="C",
                     type="my/module.soia:Point",
                     json_code="[1.5, 0, 2.5]",

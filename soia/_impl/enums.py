@@ -3,11 +3,11 @@ from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
 from typing import Any, Final, Union
 
-import soialib.reflection
-from soialib import spec as _spec
-from soialib.impl.function_maker import BodyBuilder, Expr, ExprLike, Line, make_function
-from soialib.impl.repr import repr_impl
-from soialib.impl.type_adapter import TypeAdapter
+from soia._impl.function_maker import BodyBuilder, Expr, ExprLike, Line, make_function
+from soia._impl.repr import repr_impl
+from soia._impl.type_adapter import TypeAdapter
+
+from soia import _spec, reflection
 
 
 class EnumAdapter(TypeAdapter):
@@ -119,24 +119,24 @@ class EnumAdapter(TypeAdapter):
                 Expr.local("_cls?", self.gen_class), f".{fn_name}(", json_expr, ")"
             )
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.RecordType(
+    def get_type(self) -> reflection.Type:
+        return reflection.RecordType(
             kind="record",
             value=self.spec.id,
         )
 
     def register_records(
         self,
-        registry: dict[str, soialib.reflection.Record],
+        registry: dict[str, reflection.Record],
     ) -> None:
         record_id = self.spec.id
         if record_id in registry:
             return
-        registry[record_id] = soialib.reflection.Record(
+        registry[record_id] = reflection.Record(
             kind="enum",
             id=record_id,
             fields=tuple(
-                soialib.reflection.Field(
+                reflection.Field(
                     name=field.spec.name,
                     number=field.spec.number,
                     type=field.field_type.get_type(),

@@ -1,11 +1,6 @@
 import unittest
 
-from soialib import (
-    Timestamp,
-    array_serializer,
-    optional_serializer,
-    primitive_serializer,
-)
+from soia import Timestamp, array_serializer, optional_serializer, primitive_serializer
 
 
 class TimestampTestCase(unittest.TestCase):

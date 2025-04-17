@@ -2,25 +2,25 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final, final
 
-import soialib.reflection
-from soialib import spec
-from soialib.impl.function_maker import Expr, ExprLike
-from soialib.impl.type_adapter import TypeAdapter
-from soialib.timestamp import Timestamp
+from soia._impl.function_maker import Expr, ExprLike
+from soia._impl.timestamp import Timestamp
+from soia._impl.type_adapter import TypeAdapter
+
+from soia import _spec, reflection
 
 
 class AbstractPrimitiveAdapter(TypeAdapter):
     @final
     def finalize(
         self,
-        resolve_type_fn: Callable[[spec.Type], "TypeAdapter"],
+        resolve_type_fn: Callable[[_spec.Type], "TypeAdapter"],
     ) -> None:
         pass
 
     @final
     def register_records(
         self,
-        records: dict[str, soialib.reflection.Record],
+        registry: dict[str, reflection.Record],
     ) -> None:
         pass
 
@@ -48,8 +48,8 @@ class _BoolAdapter(AbstractPrimitiveAdapter):
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
         return Expr.join("(True if ", json_expr, " else False)")
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.PrimitiveType(
+    def get_type(self) -> reflection.Type:
+        return reflection.PrimitiveType(
             kind="primitive",
             value="bool",
         )
@@ -94,8 +94,8 @@ class _Int32Adapter(_AbstractIntAdapter):
             " < 2147483647 else 2147483647)",
         )
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.PrimitiveType(
+    def get_type(self) -> reflection.Type:
+        return reflection.PrimitiveType(
             kind="primitive",
             value="int32",
         )
@@ -120,8 +120,8 @@ class _Int64Adapter(_AbstractIntAdapter):
     def to_json_expr(self, in_expr: ExprLike, readable: bool) -> Expr:
         return Expr.join(Expr.local("int64_to_json", _int64_to_json), "(", in_expr, ")")
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.PrimitiveType(
+    def get_type(self) -> reflection.Type:
+        return reflection.PrimitiveType(
             kind="primitive",
             value="int64",
         )
@@ -145,8 +145,8 @@ class _Uint64Adapter(_AbstractIntAdapter):
             Expr.local("uint64_to_json", _uint64_to_json), "(", in_expr, ")"
         )
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.PrimitiveType(
+    def get_type(self) -> reflection.Type:
+        return reflection.PrimitiveType(
             kind="primitive",
             value="uint64",
         )
@@ -181,8 +181,8 @@ class _AbstractFloatAdapter(AbstractPrimitiveAdapter):
 class _Float32Adapter(_AbstractFloatAdapter):
     """Type adapter implementation for float32."""
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.PrimitiveType(
+    def get_type(self) -> reflection.Type:
+        return reflection.PrimitiveType(
             kind="primitive",
             value="float32",
         )
@@ -192,8 +192,8 @@ class _Float32Adapter(_AbstractFloatAdapter):
 class _Float64Adapter(_AbstractFloatAdapter):
     """Type adapter implementation for float32."""
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.PrimitiveType(
+    def get_type(self) -> reflection.Type:
+        return reflection.PrimitiveType(
             kind="primitive",
             value="float64",
         )
@@ -236,8 +236,8 @@ class _TimestampAdapter(AbstractPrimitiveAdapter):
         fn = Expr.local("_timestamp_from_json", _timestamp_from_json)
         return Expr.join(fn, "(", json_expr, ")")
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.PrimitiveType(
+    def get_type(self) -> reflection.Type:
+        return reflection.PrimitiveType(
             kind="primitive",
             value="timestamp",
         )
@@ -269,8 +269,8 @@ class _StringAdapter(AbstractPrimitiveAdapter):
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
         return Expr.join("('' + (", json_expr, " or ''))")
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.PrimitiveType(
+    def get_type(self) -> reflection.Type:
+        return reflection.PrimitiveType(
             kind="primitive",
             value="string",
         )
@@ -303,8 +303,8 @@ class _BytesAdapter(AbstractPrimitiveAdapter):
             Expr.local("fromhex", _BytesAdapter._fromhex_fn), "(", json_expr, ' or "")'
         )
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.PrimitiveType(
+    def get_type(self) -> reflection.Type:
+        return reflection.PrimitiveType(
             kind="primitive",
             value="bytes",
         )

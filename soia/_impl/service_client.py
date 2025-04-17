@@ -2,8 +2,7 @@ import http.client
 from typing import Final, Mapping
 from urllib.parse import urlparse
 
-from soialib import Method
-from soialib.method import Request, Response
+from soia._impl.method import Method, Request, Response
 
 
 class ServiceClient:

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
-from soialib.serializer import Serializer
+from soia._impl.serializer import Serializer
 
 Request = TypeVar("Request")
 Response = TypeVar("Response")

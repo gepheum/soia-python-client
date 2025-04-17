@@ -3,10 +3,10 @@ from dataclasses import dataclass
 from typing import TypeVar
 from weakref import WeakValueDictionary
 
-import soialib.reflection
-from soialib import spec
-from soialib.impl.function_maker import Expr, ExprLike
-from soialib.impl.type_adapter import TypeAdapter
+from soia._impl.function_maker import Expr, ExprLike
+from soia._impl.type_adapter import TypeAdapter
+
+from soia import _spec, reflection
 
 Other = TypeVar("Other")
 
@@ -64,19 +64,19 @@ class _OptionalAdapter(TypeAdapter):
 
     def finalize(
         self,
-        resolve_type_fn: Callable[[spec.Type], "TypeAdapter"],
+        resolve_type_fn: Callable[[_spec.Type], "TypeAdapter"],
     ) -> None:
         self.other_adapter.finalize(resolve_type_fn)
 
-    def get_type(self) -> soialib.reflection.Type:
-        return soialib.reflection.OptionalType(
+    def get_type(self) -> reflection.Type:
+        return reflection.OptionalType(
             kind="optional",
             value=self.other_adapter.get_type(),
         )
 
     def register_records(
         self,
-        registry: dict[str, soialib.reflection.Record],
+        registry: dict[str, reflection.Record],
     ) -> None:
         self.other_adapter.register_records(registry)
 

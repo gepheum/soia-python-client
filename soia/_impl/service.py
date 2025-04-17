@@ -3,13 +3,13 @@ import json
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, Literal, Mapping, TypeAlias, Union, cast
 
-from soialib.method import Method, Request, Response
+from soia._impl.method import Method, Request, Response
 
 RequestHeaders: TypeAlias = Mapping[str, str]
 ResponseHeaders: TypeAlias = dict[str, str]
 
 
-class ServiceImpl:
+class Service:
     _number_to_method_impl: dict[int, "_MethodImpl"]
 
     def __init__(self):
@@ -23,7 +23,7 @@ class ServiceImpl:
             Callable[[Request, RequestHeaders], Response],
             Callable[[Request, RequestHeaders, ResponseHeaders], Response],
         ],
-    ) -> "ServiceImpl":
+    ) -> "Service":
         signature = inspect.Signature.from_callable(impl)
         num_positional_params = 0
         for param in signature.parameters.values():
@@ -68,6 +68,26 @@ class ServiceImpl:
     class RawResponse:
         data: str
         type: Literal["ok-json", "bad-request", "server-error"]
+
+        @property
+        def status_code(self):
+            if self.type == "ok-json":
+                return 200
+            elif self.type == "bad-request":
+                return 400
+            elif self.type == "server-error":
+                return 500
+            else:
+                raise TypeError(f"Unknown response type: {self.type}")
+
+        @property
+        def content_type(self):
+            if self.type == "ok-json":
+                return "application/json"
+            elif self.type == "bad-request" or self.type == "server-error":
+                return "text/plain; charset=utf-8"
+            else:
+                raise TypeError(f"Unknown response type: {self.type}")
 
     def handle_request(
         self,

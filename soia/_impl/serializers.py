@@ -1,10 +1,10 @@
 from typing import Final, Literal, TypeVar, overload
 
-from soialib.impl import primitives
-from soialib.impl.arrays import get_array_adapter
-from soialib.impl.optionals import get_optional_adapter
-from soialib.serializer import Serializer, make_serializer
-from soialib.timestamp import Timestamp
+from soia._impl import primitives
+from soia._impl.arrays import get_array_adapter
+from soia._impl.optionals import get_optional_adapter
+from soia._impl.serializer import Serializer, make_serializer
+from soia._impl.timestamp import Timestamp
 
 Item = TypeVar("Item")
 Other = TypeVar("Other")

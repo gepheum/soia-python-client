@@ -1,7 +1,6 @@
 import abc
 from typing import Generic, Optional, TypeVar
 
-
 Item = TypeVar("Item")
 Key = TypeVar("Key")
 

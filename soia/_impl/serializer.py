@@ -5,10 +5,11 @@ from functools import cached_property
 from typing import Any, Generic, TypeVar, cast, final
 from weakref import WeakValueDictionary
 
-import soialib.reflection
-from soialib.impl.function_maker import Expr, LineSpan, make_function
-from soialib.impl.type_adapter import TypeAdapter
-from soialib.never import Never
+from soia._impl.function_maker import Expr, LineSpan, make_function
+from soia._impl.never import Never
+from soia._impl.type_adapter import TypeAdapter
+
+from soia import reflection
 
 T = TypeVar("T")
 
@@ -61,10 +62,10 @@ class Serializer(Generic[T]):
         return self._from_json_fn(jsonlib.loads(json_code))
 
     @cached_property
-    def type_descriptor(self) -> soialib.reflection.TypeDescriptor:
-        records: dict[str, soialib.reflection.Record] = {}
+    def type_descriptor(self) -> reflection.TypeDescriptor:
+        records: dict[str, reflection.Record] = {}
         self._adapter.register_records(records)
-        return soialib.reflection.TypeDescriptor(
+        return reflection.TypeDescriptor(
             type=self._adapter.get_type(),
             records=tuple(records.values()),
         )
