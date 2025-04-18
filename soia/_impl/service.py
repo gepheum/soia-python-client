@@ -1,13 +1,12 @@
 import inspect
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Literal, Protocol, TypeAlias, Union, cast
+from typing import Any, Callable, Generic, Literal, TypeAlias, Union, cast
 
 from soia._impl.method import Method, Request, Response
 
-
-class RequestHeaders(Protocol):
-    def __getitem__(self, key: str, /) -> str | None: ...
+RequestHeaders: TypeAlias = Mapping[str, str]
 
 
 ResponseHeaders: TypeAlias = dict[str, str]
@@ -34,7 +33,8 @@ class Service:
                 req_body = request.get_data(as_text=True)
             else:
                 req_body = urllib.parse.unquote(request.query_string.decode("utf-8"))
-            raw_response = soia_service.handle_request(req_body, request.headers, {})
+            req_headers = dict(request.headers)
+            raw_response = soia_service.handle_request(req_body, req_headers, {})
             return Response(
                 raw_response.data,
                 status=raw_response.status_code,

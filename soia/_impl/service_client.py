@@ -1,4 +1,5 @@
 import http.client
+import re
 from typing import Any, Final, Mapping
 from urllib.parse import urlparse
 
@@ -65,14 +66,14 @@ class ServiceClient:
                 res_headers.clear()
                 res_headers.extend(response.getheaders())
             status_code = response.status
-            content_type = response.getheader("Content-Type")
+            content_type = response.getheader("Content-Type") or ""
             response_data = response.read().decode("utf-8", errors="ignore")
         finally:
             conn.close()
         if status_code in range(200, 300):
             return method.response_serializer.from_json_code(response_data)
         else:
-            message = f"HTTP response status {status_code}"
-            if content_type == "text/plain":
+            message = f"HTTP status {status_code}"
+            if re.match(r"text/plain\b", content_type):
                 message = f"{message}: {response_data}"
             raise RuntimeError(message)
