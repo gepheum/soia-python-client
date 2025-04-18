@@ -17,28 +17,31 @@ class Service:
 
     Usage: call '.add_method()' to register method implementations, then call
     '.handle_request()' from the function called by your web framework when an
-    HTTP request is sent to your service's URL.
+    HTTP request is received at your service's endpoint.
 
     Example with Flask:
 
         from flask import Response, request
 
-        soia_service = soia.Service()
-        soia_service.add_method(...)
-        soia_service.add_method(...)
+        s = soia.Service()
+        s.add_method(...)
+        s.add_method(...)
 
         @app.route("/myapi", methods=["GET", "POST"])
         def myapi():
             if request.method == "POST":
                 req_body = request.get_data(as_text=True)
             else:
-                req_body = urllib.parse.unquote(request.query_string.decode("utf-8"))
+                query_string = request.query_string.decode("utf-8")
+                req_body = urllib.parse.unquote(query_string)
             req_headers = dict(request.headers)
-            raw_response = soia_service.handle_request(req_body, req_headers, {})
+            res_headers: dict[str, str] = {}
+            raw_response = s.handle_request(req_body, req_headers, res_headers)
             return Response(
                 raw_response.data,
                 status=raw_response.status_code,
                 content_type=raw_response.content_type,
+                headers=res_headers,
             )
     """
 
@@ -125,7 +128,7 @@ class Service:
         self,
         req_body: str,
         req_headers: RequestHeaders,
-        res_headers: ResponseHeaders | None,
+        res_headers: ResponseHeaders,
     ) -> RawResponse:
         if req_body == "list":
 
@@ -179,8 +182,9 @@ class Service:
                 f"bad request: can't parse JSON: {e}", "bad-request"
             )
 
+        res_headers.clear()
         try:
-            res: Any = method_impl.impl(req, req_headers, res_headers or {})
+            res: Any = method_impl.impl(req, req_headers, res_headers)
         except Exception as e:
             return self.RawResponse(f"server error: {e}", "server-error")
 
