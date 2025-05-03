@@ -1,18 +1,16 @@
 import inspect
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Literal, TypeAlias, Union, cast
+from typing import Any, Callable, Generic, Literal, TypeVar, Union, cast
 
 from soia._impl.method import Method, Request, Response
 
-RequestHeaders: TypeAlias = Mapping[str, str]
+RequestHeaders = TypeVar("RequestHeaders")
+
+ResponseHeaders = TypeVar("ResponseHeaders")
 
 
-ResponseHeaders: TypeAlias = dict[str, str]
-
-
-class Service:
+class Service(Generic[RequestHeaders, ResponseHeaders]):
     """Wraps around the implementation of a soia service on the server side.
 
     Usage: call '.add_method()' to register method implementations, then call
@@ -22,8 +20,10 @@ class Service:
     Example with Flask:
 
         from flask import Response, request
+        from werkzeug.datastructures import Headers
 
-        s = soia.Service()
+
+        s = soia.Service[Headers, Headers]()
         s.add_method(...)
         s.add_method(...)
 
@@ -34,8 +34,8 @@ class Service:
             else:
                 query_string = request.query_string.decode("utf-8")
                 req_body = urllib.parse.unquote(query_string)
-            req_headers = dict(request.headers)
-            res_headers: dict[str, str] = {}
+            req_headers = request.headers
+            res_headers = Headers()
             raw_response = s.handle_request(req_body, req_headers, res_headers)
             return Response(
                 raw_response.data,
@@ -182,7 +182,6 @@ class Service:
                 f"bad request: can't parse JSON: {e}", "bad-request"
             )
 
-        res_headers.clear()
         try:
             res: Any = method_impl.impl(req, req_headers, res_headers)
         except Exception as e:
@@ -201,6 +200,6 @@ class Service:
 
 
 @dataclass(frozen=True)
-class _MethodImpl(Generic[Request, Response]):
+class _MethodImpl(Generic[Request, Response, RequestHeaders, ResponseHeaders]):
     method: Method[Request, Response]
     impl: Callable[[Request, RequestHeaders, ResponseHeaders], Response]
