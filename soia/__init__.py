@@ -8,7 +8,7 @@ from soia._impl.serializers import (
     optional_serializer,
     primitive_serializer,
 )
-from soia._impl.service import RequestHeaders, ResponseHeaders, Service
+from soia._impl.service import RawServiceResponse, Service, ServiceAsync
 from soia._impl.service_client import ServiceClient
 from soia._impl.timestamp import Timestamp
 
@@ -18,10 +18,10 @@ __all__ = [
     "_",
     "KeyedItems",
     "Method",
-    "RequestHeaders",
-    "ResponseHeaders",
+    "RawServiceResponse",
     "Serializer",
     "Service",
+    "ServiceAsync",
     "ServiceClient",
     "Timestamp",
     "array_serializer",
