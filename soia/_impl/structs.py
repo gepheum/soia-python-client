@@ -135,6 +135,7 @@ class StructAdapter(TypeAdapter):
             ),
         )
         mutable_class.__init__ = cast(Any, _make_mutable_class_init_fn(fields))
+        frozen_class.whole = _make_whole_static_factory_method(frozen_class)
 
         frozen_class.__eq__ = _make_eq_fn(fields)
         frozen_class.__hash__ = cast(Any, _make_hash_fn(fields, self.record_hash))
@@ -260,7 +261,7 @@ def _make_frozen_class_init_fn(
     fields: Sequence[_Field],
     frozen_class: type,
     simple_class: type,
-) -> Callable[[Any], None]:
+) -> Callable[..., None]:
     """
     Returns the implementation of the __init__() method of the frozen class.
     """
@@ -354,7 +355,7 @@ def _make_frozen_class_init_fn(
     )
 
 
-def _make_mutable_class_init_fn(fields: Sequence[_Field]) -> Callable[[Any], None]:
+def _make_mutable_class_init_fn(fields: Sequence[_Field]) -> Callable[..., None]:
     """
     Returns the implementation of the __init__() method of the mutable class.
     """
@@ -381,6 +382,12 @@ def _make_mutable_class_init_fn(fields: Sequence[_Field]) -> Callable[[Any], Non
         params=params,
         body=builder.build(),
     )
+
+
+def _make_whole_static_factory_method(frozen_class: type) -> Callable[..., Any]:
+    def whole(**kwargs):
+        return frozen_class(**kwargs)
+    return whole
 
 
 def _make_to_mutable_fn(
@@ -526,7 +533,7 @@ def _make_hash_fn(
     )
 
 
-def _make_repr_fn(fields: Sequence[_Field]) -> Callable[[Any], Any]:
+def _make_repr_fn(fields: Sequence[_Field]) -> Callable[[Any], str]:
     """
     Returns the implementation of the __repr__() method of both the frozen class and the
     mutable class.
