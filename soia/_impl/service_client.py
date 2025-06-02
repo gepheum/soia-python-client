@@ -1,6 +1,5 @@
 import http.client
 import re
-import typing
 from typing import Any, Final, Mapping, Protocol
 from urllib.parse import urlparse
 
