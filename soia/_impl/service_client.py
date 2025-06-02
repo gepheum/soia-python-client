@@ -1,6 +1,7 @@
 import http.client
 import re
-from typing import Any, Final, Mapping
+import typing
+from typing import Any, Final, Mapping, Protocol
 from urllib.parse import urlparse
 
 from soia._impl.method import Method, Request, Response
@@ -77,3 +78,88 @@ class ServiceClient:
             if re.match(r"text/plain\b", content_type):
                 message = f"{message}: {response_data}"
             raise RuntimeError(message)
+
+    async def invoke_remote_async(
+        self,
+        aiohttp_client_session: "_AiohttpClientSession",
+        method: Method[Request, Response],
+        request: Request,
+        headers: Mapping[str, str] = {},
+        *,
+        res_headers: list[tuple[str, str]] | None = None,
+    ) -> Response:
+        """
+        Asynchronously invokes the given method on the remote server through an RPC.
+
+        Usage:
+            import aiohttp
+
+            async with aiohttp.ClientSession() as session:
+                response = await service_client.invoke_remote_async(
+                    session,
+                    method,
+                    request,
+                    headers,
+                )
+
+        With timeout:
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                response = await service_client.invoke_remote_async(
+                    session,
+                    method,
+                    request,
+                    headers,
+                )
+        """
+
+        request_json = method.request_serializer.to_json_code(request)
+        body = ":".join(
+            [
+                method.name,
+                str(method.number),
+                "",
+                request_json,
+            ]
+        )
+        
+        request_headers = {
+            **headers,
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Length": str(len(body)),
+        }
+
+        # Build the URL
+        url = f"{self._scheme}://{self._host}{self._path}"
+
+        async with aiohttp_client_session.post(
+            url,
+            data=body,
+            headers=request_headers,
+        ) as response:
+            if res_headers is not None:
+                res_headers.clear()
+                res_headers.extend(response.headers.items())
+
+            status_code = response.status
+            content_type = response.headers.get("Content-Type", "")
+            response_data = await response.text(encoding="utf-8", errors="ignore")
+
+        if status_code in range(200, 300):
+            return method.response_serializer.from_json_code(response_data)
+        else:
+            message = f"HTTP status {status_code}"
+            if re.match(r"text/plain\b", content_type):
+                message = f"{message}: {response_data}"
+            raise RuntimeError(message)
+
+
+class _AiohttpClientSession(Protocol):
+    def post(
+        self,
+        url: str,
+        *,
+        data: str,
+        headers: Mapping[str, str],
+    ) -> Any:
+        ...
