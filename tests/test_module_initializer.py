@@ -518,6 +518,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         point = point_cls.SERIALIZER.from_json_code('{"x":1,"y":2}')
         self.assertEqual(point.x, 1.0)
         self.assertIsInstance(point.x, float)
+        self.assertEqual(point._array_len, 3)
 
     def test_point_with_unrecognized_and_removed_fields(self):
         point_cls = self.init_test_module()["Point"]

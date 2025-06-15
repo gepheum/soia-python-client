@@ -676,7 +676,7 @@ def _make_from_json_fn(
         name = field.field.name
         lvalue = f"ret.{field.field.attribute}"
         builder.append_ln(f'  if "{name}" in json:')
-        builder.append_ln(f"    array_len = {field.field.number}")
+        builder.append_ln(f"    array_len = {field.field.number + 1}")
         builder.append_ln(
             f"    {lvalue} = ",
             field.type.from_json_expr(f'json["{name}"]'),
