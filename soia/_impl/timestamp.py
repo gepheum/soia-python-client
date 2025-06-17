@@ -25,6 +25,10 @@ class Timestamp:
         return Timestamp(unix_millis=round(unix_seconds * 1000))
 
     @staticmethod
+    def from_iso_format(date_string: str) -> "Timestamp":
+        return Timestamp.from_datetime(datetime.datetime.fromisoformat(date_string))
+
+    @staticmethod
     def from_datetime(dt: datetime.datetime) -> "Timestamp":
         return Timestamp.from_unix_seconds(dt.timestamp())
 

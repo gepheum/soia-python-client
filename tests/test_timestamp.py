@@ -24,6 +24,10 @@ class TimestampTestCase(unittest.TestCase):
         ts = Timestamp.from_datetime(datetime.fromtimestamp(200, tz=timezone.utc))
         self.assertEqual(ts.unix_millis, 200000)
 
+    def test_from_iso_format(self):
+        ts = Timestamp.from_iso_format("1970-01-01T00:03:20Z")
+        self.assertEqual(ts.unix_millis, 200000)
+
     def test_epoch(self):
         self.assertEqual(Timestamp.EPOCH.unix_millis, 0)
 
