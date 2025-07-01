@@ -49,7 +49,7 @@ class _ArrayAdapter(TypeAdapter):
         self.empty_listuple = listuple_class()
 
     def default_expr(self) -> ExprLike:
-        return "()"
+        return Expr.local("_d?", self.empty_listuple)
 
     def to_frozen_expr(self, arg_expr: ExprLike) -> Expr:
         listuple_class_local = Expr.local("_lstpl?", self.listuple_class)

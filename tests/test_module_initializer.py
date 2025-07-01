@@ -1031,6 +1031,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIs(entries.find("bar"), entries[3])
         self.assertIs(entries.find_or_default("foo"), entries[0])
         self.assertIs(entries.find_or_default("zoo"), entry_cls.DEFAULT)
+        serializer = json_value_cls.Object.SERIALIZER
+        json_object = serializer.from_json_code("0")
+        entries = json_object.entries
+        self.assertIsInstance(entries, KeyedItems)
+        self.assertIs(entries.find("zoo"), None)
 
     def test_find_in_keyed_items_with_complex_path(self):
         module = self.init_test_module()
