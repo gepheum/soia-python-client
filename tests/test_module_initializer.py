@@ -1,6 +1,6 @@
 import dataclasses
 import unittest
-from typing import Any
+from typing import Any, Literal
 
 from soia._module_initializer import init_module
 from soia.reflection import TypeDescriptor
@@ -701,6 +701,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
             serializer.to_json(error, readable=True),
             {"kind": "error", "value": "An error occurred"},
         )
+
+    def test_enum_kind(self):
+        module = self.init_test_module()
+        primary_color_cls = module["Status"]
+        self.assertEqual(primary_color_cls.Kind, Literal["?", "OK", "error"])
 
     def test_enum_wrap_around_mutable_struct(self):
         module = self.init_test_module()
