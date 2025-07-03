@@ -177,14 +177,11 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
             )
         try:
             req: Any
+            request_serializer = method_impl.method.request_serializer
             if request_data[0] == "json-code":
-                req = method_impl.method.request_serializer.from_json_code(
-                    request_data
-                )
+                req = request_serializer.from_json_code(request_data[1])
             elif request_data[0] == "json":
-                req = method_impl.method.request_serializer.from_json(
-                    request_data
-                )
+                req = request_serializer.from_json(request_data[1])
             else:
                 _: Never = request_data[0]
                 del _
