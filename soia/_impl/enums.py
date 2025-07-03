@@ -1,7 +1,7 @@
 import copy
 from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
-from typing import Any, Final, Literal, Type, Union
+from typing import Any, Final, Union
 
 from soia._impl.function_maker import BodyBuilder, Expr, ExprLike, Line, make_function
 from soia._impl.repr import repr_impl
@@ -42,11 +42,7 @@ class EnumAdapter(TypeAdapter):
             setattr(base_class, constant_field.attribute, constant)
 
         # Add the Kind type alias.
-        def make_kind_type() -> Type:
-            names = [f.name for f in self.all_constant_fields]
-            names.extend(f.name for f in self.spec.value_fields)
-            return Literal[*names]
-        setattr(base_class, "Kind", make_kind_type())
+        setattr(base_class, "Kind", str)
 
     def finalize(
         self,

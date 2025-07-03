@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Generic, Literal, TypeVar, Union, cast
 
 from soia._impl.method import Method, Request, Response
+from soia._impl.never import Never
 
 RequestHeaders = TypeVar("RequestHeaders")
 
@@ -90,42 +91,84 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
         tuple[Any, _MethodImpl[Request, Response, RequestHeaders, ResponseHeaders]],
         RawServiceResponse,
     ]:
-        if self.req_body == "list":
+        if self.req_body in ["", "list"]:
+            return self._handle_list()
 
-            def method_to_json(method: Method) -> Any:
-                return {
-                    "method": method.name,
-                    "number": method.number,
-                    "request": method.request_serializer.type_descriptor.as_json(),
-                    "response": method.response_serializer.type_descriptor.as_json(),
-                }
+        # Method invokation
+        method_name: str
+        method_number: int | None
+        format: str
+        request_data: tuple[Literal["json-code"], str] | tuple[Literal["json"], Any]
 
-            json_code = json.dumps(
-                {
-                    "methods": [
-                        method_to_json(method_impl.method)
-                        for method_impl in self.number_to_method_impl.values()
-                    ]
-                },
-                indent=2,
-            )
-            return RawServiceResponse(json_code, "ok-json")
-
-        parts = self.req_body.split(":", 3)
-        if len(parts) != 4:
-            return RawServiceResponse(
-                "bad request: invalid request format", "bad-request"
-            )
-        method_name = parts[0]
-        method_number_str = parts[1]
-        self.format = parts[2]
-        request_data = parts[3]
-        try:
-            method_number = int(method_number_str)
-        except Exception:
-            return RawServiceResponse(
-                "bad request: can't parse method number", "bad-request"
-            )
+        first_char = self.req_body[0]
+        if first_char.isspace() or first_char == "{":
+            # A JSON object
+            try:
+                req_body_json = json.loads(self.req_body)
+            except json.JSONDecodeError:
+                return RawServiceResponse(
+                    "bad request: invalid JSON", "bad-request"
+                )
+            method = req_body_json.get("method", ())
+            if method == ():
+                return RawServiceResponse(
+                    "bad request: missing 'method' field in JSON", "bad-request"
+                )
+            if isinstance(method, str):
+                method_name = method
+                method_number = None
+            elif isinstance(method, int):
+                method_name = "?"
+                method_number = method
+            else:
+                return RawServiceResponse(
+                    "bad request: 'method' field must be a string or an integer",
+                    "bad-request",
+                )
+            format = "readable"
+            data = req_body_json.get("request", ())
+            if data == ():
+                return RawServiceResponse(
+                    "bad request: missing 'request' field in JSON", "bad-request"
+                )
+            request_data = ("json", data)
+        else:
+            # A colon-separated string
+            parts = self.req_body.split(":", 3)
+            if len(parts) != 4:
+                return RawServiceResponse(
+                    "bad request: invalid request format", "bad-request"
+                )
+            method_name = parts[0]
+            method_number_str = parts[1]
+            format = parts[2]
+            request_data = ("json-code", parts[3])
+            if method_number_str:
+                try:
+                    method_number = int(method_number_str)
+                except Exception:
+                    return RawServiceResponse(
+                        "bad request: can't parse method number", "bad-request"
+                    )
+            else:
+                method_number = None
+        self.format = format
+        if method_number is None:
+            # Try to get the method number by name
+            all_methods = self.number_to_method_impl.values()
+            name_matches = [m for m in all_methods if m.method.name == method_name]
+            if not name_matches:
+                return RawServiceResponse(
+                    f"bad request: method not found: {method_name}",
+                    "bad-request",
+                )
+            elif len(name_matches) != 1:
+                return RawServiceResponse(
+                    f"bad request: method name '{method_name}' is ambiguous; "
+                    "use method number instead",
+                    "bad-request",
+                )
+            method_number = name_matches[0].method.number
         method_impl = self.number_to_method_impl.get(method_number)
         if not method_impl:
             return RawServiceResponse(
@@ -133,14 +176,43 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
                 "bad-request",
             )
         try:
-            req: Any = method_impl.method.request_serializer.from_json_code(
-                request_data
-            )
+            req: Any
+            if request_data[0] == "json-code":
+                req = method_impl.method.request_serializer.from_json_code(
+                    request_data
+                )
+            elif request_data[0] == "json":
+                req = method_impl.method.request_serializer.from_json(
+                    request_data
+                )
+            else:
+                _: Never = request_data[0]
+                del _
         except Exception as e:
             return RawServiceResponse(
                 f"bad request: can't parse JSON: {e}", "bad-request"
             )
         return (req, method_impl)
+
+    def _handle_list(self) -> RawServiceResponse:
+        def method_to_json(method: Method) -> Any:
+            return {
+                "method": method.name,
+                "number": method.number,
+                "request": method.request_serializer.type_descriptor.as_json(),
+                "response": method.response_serializer.type_descriptor.as_json(),
+            }
+
+        json_code = json.dumps(
+            {
+                "methods": [
+                    method_to_json(method_impl.method)
+                    for method_impl in self.number_to_method_impl.values()
+                ]
+            },
+            indent=2,
+        )
+        return RawServiceResponse(json_code, "ok-json")
 
     def _response_to_json(
         self,

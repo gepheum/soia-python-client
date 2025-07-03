@@ -121,7 +121,7 @@ class ServiceClient:
                 request_json,
             ]
         )
-        
+
         request_headers = {
             **headers,
             "Content-Type": "text/plain; charset=utf-8",
