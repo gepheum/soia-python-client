@@ -429,7 +429,7 @@ def _make_replace_method(
     """
 
     keep_local = Expr.local("KEEP", KEEP)
-    params: Params = []
+    params: Params = ["_self"]
     if fields:
         params.append("*")
     params.extend(
@@ -442,7 +442,7 @@ def _make_replace_method(
 
     def field_to_arg_assigment(attr: str) -> LineSpan:
         return LineSpan.join(
-            f"{attr}=self.{attr} if {attr} is ", keep_local, " else {attr}"
+            f"{attr}=_self.{attr} if {attr} is ", keep_local, f" else {attr}"
         )
 
     builder = BodyBuilder()
@@ -458,7 +458,7 @@ def _make_replace_method(
     )
 
     return make_function(
-        name="partial",
+        name="replace",
         params=params,
         body=builder.build(),
     )

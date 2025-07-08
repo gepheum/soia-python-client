@@ -369,6 +369,12 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(point.x, 1.5)
         self.assertEqual(point.y, 0.0)
 
+    def test_replace(self):
+        point_cls = self.init_test_module()["Point"]
+        point = point_cls(x=1.5, y=2.5).replace(y=3.5)
+        self.assertEqual(point.x, 1.5)
+        self.assertEqual(point.y, 3.5)
+
     def test_to_mutable(self):
         point_cls = self.init_test_module()["Point"]
         point = point_cls(x=1.5, y=2.5)
