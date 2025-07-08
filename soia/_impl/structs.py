@@ -14,6 +14,7 @@ from soia._impl.function_maker import (
     Params,
     make_function,
 )
+from soia._impl.keep import KEEP
 from soia._impl.repr import repr_impl
 from soia._impl.type_adapter import TypeAdapter
 
@@ -134,8 +135,12 @@ class StructAdapter(TypeAdapter):
                 simple_class=simple_class,
             ),
         )
-        mutable_class.__init__ = cast(Any, _make_mutable_class_init_fn(fields))
-        frozen_class.whole = _make_whole_static_factory_method(frozen_class)
+        mutable_class.__init__ = _make_mutable_class_init_fn(fields)
+        frozen_class.partial = _make_partial_static_factory_method(
+            fields,
+            frozen_class,
+        )
+        frozen_class.replace = _make_replace_method(fields, frozen_class)
 
         frozen_class.__eq__ = _make_eq_fn(fields)
         frozen_class.__hash__ = cast(Any, _make_hash_fn(fields, self.record_hash))
@@ -270,13 +275,7 @@ def _make_frozen_class_init_fn(
     params: Params = ["_self"]
     if fields:
         params.append("*")
-    for field in fields:
-        params.append(
-            Param(
-                name=field.field.attribute,
-                default=field.type.default_expr(),
-            )
-        )
+    params.extend(field.field.attribute for field in fields)
 
     builder = BodyBuilder()
     # Since __setattr__() was overridden to raise errors in order to make the class
@@ -384,10 +383,85 @@ def _make_mutable_class_init_fn(fields: Sequence[_Field]) -> Callable[..., None]
     )
 
 
-def _make_whole_static_factory_method(frozen_class: type) -> Callable[..., Any]:
-    def whole(**kwargs):
-        return frozen_class(**kwargs)
-    return whole
+def _make_partial_static_factory_method(
+    fields: Sequence[_Field],
+    frozen_class: type,
+) -> Callable[..., None]:
+    """
+    Returns the implementation of the partial() method of the frozen class.
+    """
+
+    params: Params = []
+    if fields:
+        params.append("*")
+    params.extend(
+        Param(
+            name=field.field.attribute,
+            default=field.type.default_expr(),
+        )
+        for field in fields
+    )
+
+    builder = BodyBuilder()
+    builder.append_ln(
+        "return ",
+        Expr.local("Frozen", frozen_class),
+        "(",
+        ", ".join(
+            f"{field.field.attribute}={field.field.attribute}" for field in fields
+        ),
+        ")",
+    )
+
+    return make_function(
+        name="partial",
+        params=params,
+        body=builder.build(),
+    )
+
+
+def _make_replace_method(
+    fields: Sequence[_Field],
+    frozen_class: type,
+) -> Callable[..., None]:
+    """
+    Returns the implementation of the replace() method of the frozen class.
+    """
+
+    keep_local = Expr.local("KEEP", KEEP)
+    params: Params = []
+    if fields:
+        params.append("*")
+    params.extend(
+        Param(
+            name=field.field.attribute,
+            default=keep_local,
+        )
+        for field in fields
+    )
+
+    def field_to_arg_assigment(attr: str) -> LineSpan:
+        return LineSpan.join(
+            f"{attr}=self.{attr} if {attr} is ", keep_local, " else {attr}"
+        )
+
+    builder = BodyBuilder()
+    builder.append_ln(
+        "return ",
+        Expr.local("Frozen", frozen_class),
+        "(",
+        LineSpan.join(
+            *(field_to_arg_assigment(field.field.attribute) for field in fields),
+            separator=", ",
+        ),
+        ")",
+    )
+
+    return make_function(
+        name="partial",
+        params=params,
+        body=builder.build(),
+    )
 
 
 def _make_to_mutable_fn(
@@ -549,14 +623,9 @@ def _make_repr_fn(fields: Sequence[_Field]) -> Callable[[Any], str]:
     for field in fields:
         attribute = field.field.attribute
         # is_not_default_expr only works on a frozen expression.
-        to_frozen_expr = field.type.to_frozen_expr(f"(self.{attribute})")
-        is_not_default_expr = field.type.is_not_default_expr(
-            to_frozen_expr, to_frozen_expr
-        )
-        builder.append_ln("if is_mutable or ", is_not_default_expr, ":")
-        builder.append_ln("  r = ", repr_local, f"(self.{attribute})")
-        builder.append_ln(f"  assignments.append(f'{attribute}={{r.indented}}')")
-        builder.append_ln("  any_complex = any_complex or r.complex")
+        builder.append_ln("r = ", repr_local, f"(self.{attribute})")
+        builder.append_ln(f"assignments.append(f'{attribute}={{r.indented}}')")
+        builder.append_ln("any_complex = any_complex or r.complex")
     builder.append_ln("if len(assignments) <= 1 and not any_complex:")
     builder.append_ln("  body = ''.join(assignments)")
     builder.append_ln("else:")

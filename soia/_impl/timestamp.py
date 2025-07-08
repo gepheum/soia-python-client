@@ -5,6 +5,14 @@ from typing import Any, Final, Union, cast, final, overload
 
 @final
 class Timestamp:
+    """
+    A number of milliseconds since the Unix epoch (1970-01-01T00:00:00Z).
+
+    Does not contain any timezone information.
+    Convertible to and from datetime objects.
+    Immutable.
+    """
+
     __slots__ = ("unix_millis",)
 
     unix_millis: int
@@ -26,7 +34,14 @@ class Timestamp:
 
     @staticmethod
     def from_datetime(dt: datetime.datetime) -> "Timestamp":
-        return Timestamp.from_unix_seconds(dt.timestamp())
+        # dt.timestamp() mail fail if the year is not in [1970, 2038]
+        if dt.tzinfo is None:
+            timestamp = (
+                dt - _EPOCH_DT.astimezone().replace(tzinfo=None)
+            ).total_seconds()
+        else:
+            timestamp = (dt - _EPOCH_DT).total_seconds()
+        return Timestamp.from_unix_seconds(timestamp)
 
     @staticmethod
     def now() -> "Timestamp":
@@ -41,9 +56,26 @@ class Timestamp:
         return self.unix_millis / 1000.0
 
     def to_datetime_or_raise(self) -> datetime.datetime:
-        return datetime.datetime.fromtimestamp(
-            self.unix_seconds, tz=datetime.timezone.utc
-        )
+        """
+        Returns a datetime object representing the timestamp in UTC timezone.
+
+        Raises an exception if the timestamp is out of bounds for datetime.
+        If you don't want the exception, use 'to_datetime_or_limit()' instead.
+        """
+        return _EPOCH_DT + datetime.timedelta(seconds=self.unix_seconds)
+
+    def to_datetime_or_limit(self) -> datetime.datetime:
+        """
+        Returns a datetime object representing the timestamp in UTC timezone.
+
+        Clamps the timestamp to the minimum or maximum datetime if it is out of bounds.
+        """
+        if self.unix_seconds <= (_MIN_DT_UTC - _EPOCH_DT).total_seconds():
+            return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+        elif self.unix_seconds >= (_MAX_DT_UTC - _EPOCH_DT).total_seconds():
+            return datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)
+        else:
+            return self.to_datetime_or_raise()
 
     def __add__(self, td: datetime.timedelta) -> "Timestamp":
         return Timestamp(
@@ -126,3 +158,8 @@ class Timestamp:
 setattr(Timestamp, "EPOCH", Timestamp.from_unix_millis(0))
 setattr(Timestamp, "MIN", Timestamp.from_unix_millis(-8640000000000000))
 setattr(Timestamp, "MAX", Timestamp.from_unix_millis(8640000000000000))
+
+
+_EPOCH_DT: Final = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+_MIN_DT_UTC: Final = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+_MAX_DT_UTC: Final = datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)

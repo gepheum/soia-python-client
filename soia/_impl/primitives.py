@@ -3,10 +3,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final, final
 
-from soia import _spec, reflection
 from soia._impl.function_maker import Expr, ExprLike
 from soia._impl.timestamp import Timestamp
 from soia._impl.type_adapter import TypeAdapter
+
+from soia import _spec, reflection
 
 
 class AbstractPrimitiveAdapter(TypeAdapter):
@@ -296,7 +297,9 @@ class _BytesAdapter(AbstractPrimitiveAdapter):
     ) -> Expr:
         return Expr.join(
             Expr.local("b64encode", base64.b64encode),
-            "(", in_expr, ").decode('utf-8')",
+            "(",
+            in_expr,
+            ").decode('utf-8')",
         )
 
     def from_json_expr(self, json_expr: ExprLike) -> Expr:

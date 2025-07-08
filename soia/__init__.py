@@ -1,5 +1,6 @@
 import typing as _typing
 
+from soia._impl.keep import KEEP, Keep
 from soia._impl.keyed_items import KeyedItems
 from soia._impl.method import Method
 from soia._impl.serializer import Serializer
@@ -16,6 +17,8 @@ _: _typing.Final[_typing.Any] = None
 
 __all__ = [
     "_",
+    "Keep",
+    "KEEP",
     "KeyedItems",
     "Method",
     "RawServiceResponse",

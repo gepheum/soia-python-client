@@ -2,6 +2,7 @@ import dataclasses
 import unittest
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from soia import Timestamp
 
@@ -23,6 +24,16 @@ class TimestampTestCase(unittest.TestCase):
     def test_from_datetime(self):
         ts = Timestamp.from_datetime(datetime.fromtimestamp(200, tz=timezone.utc))
         self.assertEqual(ts.unix_millis, 200000)
+        ts = Timestamp.from_datetime(
+            datetime.fromtimestamp(200, tz=ZoneInfo("America/New_York"))
+        )
+        self.assertEqual(ts.unix_millis, 200000)
+        ts = Timestamp.from_datetime(datetime.fromtimestamp(200))
+        self.assertEqual(ts.unix_millis, 200000)
+        ts = Timestamp.from_datetime(datetime.min)
+        self.assertEqual(ts.unix_millis, -62135578800000)
+        ts = Timestamp.from_datetime(datetime.max)
+        self.assertEqual(ts.unix_millis, 253402318800000)
 
     def test_epoch(self):
         self.assertEqual(Timestamp.EPOCH.unix_millis, 0)
@@ -76,11 +87,12 @@ class TimestampTestCase(unittest.TestCase):
             pass
 
     def test_to_datetime(self):
-        ts = Timestamp.from_unix_seconds(200)
         self.assertEqual(
-            ts.to_datetime_or_raise(),
+            Timestamp.from_unix_seconds(200).to_datetime_or_raise(),
             datetime.fromtimestamp(200, tz=timezone.utc),
         )
+        Timestamp.from_datetime(datetime.min + timedelta(days=1)).to_datetime_or_raise()
+        Timestamp.from_datetime(datetime.max - timedelta(days=1)).to_datetime_or_raise()
 
     def test_to_datetime_out_of_bound(self):
         try:
@@ -88,6 +100,14 @@ class TimestampTestCase(unittest.TestCase):
             self.fail("Expected to fail with OverflowError or ValueError")
         except Exception:
             pass
+        self.assertEqual(
+            Timestamp.MIN.to_datetime_or_limit(),
+            datetime.min.replace(tzinfo=timezone.utc),
+        )
+        self.assertEqual(
+            Timestamp.MAX.to_datetime_or_limit(),
+            datetime.max.replace(tzinfo=timezone.utc),
+        )
 
     def test_add_timedelta(self):
         ts = Timestamp.from_unix_seconds(200)
