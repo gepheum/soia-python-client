@@ -2,10 +2,9 @@ import dataclasses
 import unittest
 from typing import Any
 
+from soia import KeyedItems, Method, Timestamp, _spec
 from soia._module_initializer import init_module
 from soia.reflection import TypeDescriptor
-
-from soia import KeyedItems, Method, Timestamp, _spec
 
 
 class ModuleInitializerTestCase(unittest.TestCase):
@@ -423,7 +422,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
             u64=3,
             t=Timestamp.from_unix_millis(4),
         )
-        self.assertEqual(serializer.to_json(p), [1, "61", 3.14, 3.14, 1, 2, 3, "", 4])
+        self.assertEqual(serializer.to_json(p), [1, "YQ==", 3.14, 3.14, 1, 2, 3, "", 4])
 
     def test_primitives_from_json(self):
         primitives_cls = self.init_test_module()["Primitives"]
@@ -431,7 +430,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         json = [0] * 100
         self.assertEqual(serializer.from_json(json), primitives_cls.DEFAULT)
         self.assertEqual(
-            serializer.from_json([1, "61", 3.14, 3.14, 1, 2, 3, "", 4]),
+            serializer.from_json([1, "YQ==", 3.14, 3.14, 1, 2, 3, "", 4]),
             primitives_cls(
                 bool=True,
                 bytes=b"a",

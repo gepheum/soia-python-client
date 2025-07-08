@@ -1,12 +1,12 @@
+import base64
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final, final
 
+from soia import _spec, reflection
 from soia._impl.function_maker import Expr, ExprLike
 from soia._impl.timestamp import Timestamp
 from soia._impl.type_adapter import TypeAdapter
-
-from soia import _spec, reflection
 
 
 class AbstractPrimitiveAdapter(TypeAdapter):
@@ -280,8 +280,6 @@ STRING_ADAPTER: Final[TypeAdapter] = _StringAdapter()
 
 
 class _BytesAdapter(AbstractPrimitiveAdapter):
-    _fromhex_fn: Final = bytes.fromhex
-
     def default_expr(self) -> ExprLike:
         return 'b""'
 
@@ -296,11 +294,14 @@ class _BytesAdapter(AbstractPrimitiveAdapter):
         in_expr: ExprLike,
         readable: bool,
     ) -> Expr:
-        return Expr.join(in_expr, ".hex()")
+        return Expr.join(
+            Expr.local("b64encode", base64.b64encode),
+            "(", in_expr, ").decode('utf-8')",
+        )
 
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
         return Expr.join(
-            Expr.local("fromhex", _BytesAdapter._fromhex_fn), "(", json_expr, ' or "")'
+            Expr.local("b64decode", base64.b64decode), "(", json_expr, ' or "")'
         )
 
     def get_type(self) -> reflection.Type:
