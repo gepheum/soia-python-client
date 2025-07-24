@@ -2,10 +2,9 @@ import dataclasses
 import unittest
 from typing import Any
 
+from soia import KeyedItems, Method, Timestamp, _spec
 from soia._module_initializer import init_module
 from soia.reflection import TypeDescriptor
-
-from soia import KeyedItems, Method, Timestamp, _spec
 
 
 class ModuleInitializerTestCase(unittest.TestCase):
@@ -1201,6 +1200,10 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         "kind": "enum",
                         "id": "my/module.soia:JsonValue",
                         "fields": [
+                            {
+                                "name": "NULL",
+                                "number": 1,
+                            },
                             {
                                 "name": "bool",
                                 "type": {"kind": "primitive", "value": "bool"},

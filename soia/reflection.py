@@ -109,11 +109,19 @@ class _Serializer(Generic[_T]):
     from_json: Callable[[Any], _T]
 
 
+@dataclass(frozen=True, eq=True)
+class _NoDefault:
+    pass
+
+
+_NO_DEFAULT: Final = _NoDefault()
+
+
 @dataclass(frozen=True)
 class _FieldSerializer(Generic[_T]):
     name: str
     serializer: _Serializer[_T]
-    default: Optional[_T] = None
+    default: _T | _NoDefault = _NO_DEFAULT
 
 
 def _primitive_serializer(check_type_fn: Callable[[Any], _T]) -> _Serializer[_T]:
@@ -144,7 +152,7 @@ def _dataclass_serializer(
         def field_from_json(field: _FieldSerializer) -> Any:
             value_json = json.get(field.name)
             if value_json is None:
-                if field.default is not None:
+                if field.default != _NO_DEFAULT:
                     return field.default
                 else:
                     # Will raise an exception.
@@ -192,6 +200,22 @@ def _forwarding_serializer(
 
     def from_json(json: Any) -> _T:
         return get_serializer_fn().from_json(json)
+
+    return _Serializer(to_json, from_json)
+
+
+def _optional_serializer(
+    other_serializer: _Serializer[_T],
+) -> _Serializer[Optional[_T]]:
+    def to_json(input: Optional[_T]) -> Any:
+        if input is None:
+            return None
+        return other_serializer.to_json(input)
+
+    def from_json(json: Any) -> Optional[_T]:
+        if json is None:
+            return None
+        return other_serializer.from_json(json)
 
     return _Serializer(to_json, from_json)
 
@@ -292,9 +316,10 @@ _FIELD_SERIALIZER: Final = _dataclass_serializer(
             "name",
             _primitive_serializer(str),
         ),
-        _FieldSerializer(
+        _FieldSerializer[Optional[Type]](
             "type",
-            _forwarding_serializer(_type_serializer),
+            _optional_serializer(_forwarding_serializer(_type_serializer)),
+            default=None,
         ),
         _FieldSerializer(
             "number",

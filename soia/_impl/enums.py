@@ -3,11 +3,10 @@ from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
 from typing import Any, Final, Union
 
+from soia import _spec, reflection
 from soia._impl.function_maker import BodyBuilder, Expr, ExprLike, Line, make_function
 from soia._impl.repr import repr_impl
 from soia._impl.type_adapter import TypeAdapter
-
-from soia import _spec, reflection
 
 
 class EnumAdapter(TypeAdapter):
@@ -139,6 +138,13 @@ class EnumAdapter(TypeAdapter):
             kind="enum",
             id=record_id,
             fields=tuple(
+                reflection.Field(
+                    name=field.name,
+                    number=field.number,
+                    type=None,
+                )
+                for field in self.all_constant_fields if field.number != 0
+            ) + tuple(
                 reflection.Field(
                     name=field.spec.name,
                     number=field.spec.number,
