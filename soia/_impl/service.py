@@ -61,7 +61,7 @@ _RESTUDIO_HTML = """<!DOCTYPE html>
   <head>
     <meta charset="utf-8" />
     <title>RESTudio</title>
-    <script src="dist/restudio-standalone.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/restudio/dist/restudio-standalone.js"></script>
   </head>
   <body style="margin: 0; padding: 0;">
     <restudio-app></restudio-app>
