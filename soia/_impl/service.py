@@ -26,27 +26,48 @@ class _MethodImpl(Generic[Request, Response, RequestHeaders, ResponseHeaders]):
 @dataclass(frozen=True)
 class RawServiceResponse:
     data: str
-    type: Literal["ok-json", "bad-request", "server-error"]
+    type: Literal["ok-json", "ok-html", "bad-request", "server-error"]
 
     @property
     def status_code(self):
-        if self.type == "ok-json":
+        if self.type == "ok-json" or self.type == "ok-html":
             return 200
         elif self.type == "bad-request":
             return 400
         elif self.type == "server-error":
             return 500
         else:
+            _: Never = self.type
             raise TypeError(f"Unknown response type: {self.type}")
 
     @property
     def content_type(self):
         if self.type == "ok-json":
             return "application/json"
+        if self.type == "ok-html":
+            return "text/html; charset=utf-8"
         elif self.type == "bad-request" or self.type == "server-error":
             return "text/plain; charset=utf-8"
         else:
+            _: Never = self.type
             raise TypeError(f"Unknown response type: {self.type}")
+
+
+# Copied from
+#   https://github.com/gepheum/restudio/blob/main/index.jsdeliver.html
+_RESTUDIO_HTML = """<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>RESTudio</title>
+    <script src="dist/restudio-standalone.js"></script>
+  </head>
+  <body style="margin: 0; padding: 0;">
+    <restudio-app></restudio-app>
+  </body>
+</html>
+"""
 
 
 @dataclass()
@@ -93,6 +114,9 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
     ]:
         if self.req_body in ["", "list"]:
             return self._handle_list()
+
+        if self.req_body == "restudio":
+            return self._handle_restudio()
 
         # Method invokation
         method_name: str
@@ -210,6 +234,9 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
             indent=2,
         )
         return RawServiceResponse(json_code, "ok-json")
+
+    def _handle_restudio(self) -> RawServiceResponse:
+        return RawServiceResponse(_RESTUDIO_HTML, "ok-html")
 
     def _response_to_json(
         self,
