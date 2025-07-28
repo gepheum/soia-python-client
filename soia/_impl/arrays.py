@@ -3,11 +3,10 @@ from dataclasses import FrozenInstanceError
 from typing import Generic, Optional
 from weakref import WeakValueDictionary
 
+from soia import _spec, reflection
 from soia._impl.function_maker import Any, Expr, ExprLike, Line, make_function
 from soia._impl.keyed_items import Item, Key, KeyedItems
 from soia._impl.type_adapter import TypeAdapter
-
-from soia import _spec, reflection
 
 
 def get_array_adapter(
@@ -122,6 +121,9 @@ class _ArrayAdapter(TypeAdapter):
         registry: dict[str, reflection.Record],
     ) -> None:
         self.item_adapter.register_records(registry)
+
+    def frozen_class_of_struct(self) -> type | None:
+        return None
 
 
 _ItemAndKeyAttributes = tuple[TypeAdapter, tuple[str, ...]]

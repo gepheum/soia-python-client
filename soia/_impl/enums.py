@@ -73,6 +73,12 @@ class EnumAdapter(TypeAdapter):
         for value_field in value_fields:
             wrap_fn = _make_wrap_fn(value_field)
             setattr(base_class, f"wrap_{value_field.spec.name}", wrap_fn)
+            # Check if the field type is a struct type.
+            field_type = resolve_type_fn(value_field.spec.type)
+            frozen_class = field_type.frozen_class_of_struct()
+            if frozen_class:
+                create_fn = _make_create_fn(wrap_fn, frozen_class)
+                setattr(base_class, f"create_{value_field.spec.name}", create_fn)
 
         base_class._fj = _make_from_json_fn(
             self.all_constant_fields,
@@ -143,8 +149,10 @@ class EnumAdapter(TypeAdapter):
                     number=field.number,
                     type=None,
                 )
-                for field in self.all_constant_fields if field.number != 0
-            ) + tuple(
+                for field in self.all_constant_fields
+                if field.number != 0
+            )
+            + tuple(
                 reflection.Field(
                     name=field.spec.name,
                     number=field.spec.number,
@@ -156,6 +164,9 @@ class EnumAdapter(TypeAdapter):
         )
         for field in self.value_fields:
             field.field_type.register_records(registry)
+
+    def frozen_class_of_struct(self) -> type | None:
+        return None
 
 
 def _make_base_class(spec: _spec.Enum) -> type:
@@ -173,6 +184,9 @@ def _make_base_class(spec: _spec.Enum) -> type:
         @property
         def union(self) -> Any:
             return self
+
+        def __bool__(self) -> bool:
+            return self.kind != "?"
 
         def __setattr__(self, name: str, value: Any):
             raise FrozenInstanceError(self.__class__.__qualname__)
@@ -342,6 +356,13 @@ def _make_wrap_fn(field: _ValueField) -> Callable[[Any], Any]:
         params=["value"],
         body=builder.build(),
     )
+
+
+def _make_create_fn(wrap_fn: Callable[[Any], Any], frozen_class: type) -> Callable:
+    def create(**kwargs):
+        return wrap_fn(frozen_class(**kwargs))
+
+    return create
 
 
 def _make_from_json_fn(

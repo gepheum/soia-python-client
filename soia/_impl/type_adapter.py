@@ -1,9 +1,8 @@
 from collections.abc import Callable
 from typing import Protocol
 
-from soia._impl.function_maker import ExprLike
-
 from soia import _spec, reflection
+from soia._impl.function_maker import ExprLike
 
 
 class TypeAdapter(Protocol):

@@ -3,6 +3,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
 from typing import Any, Final, Union, cast
 
+from soia import _spec, reflection
 from soia._impl.function_maker import (
     BodyBuilder,
     Expr,
@@ -17,8 +18,6 @@ from soia._impl.function_maker import (
 from soia._impl.keep import KEEP
 from soia._impl.repr import repr_impl
 from soia._impl.type_adapter import TypeAdapter
-
-from soia import _spec, reflection
 
 
 class StructAdapter(TypeAdapter):
@@ -235,6 +234,9 @@ class StructAdapter(TypeAdapter):
         )
         for field in self.fields:
             field.type.register_records(registry)
+
+    def frozen_class_of_struct(self) -> type | None:
+        return self.gen_class
 
 
 class _Frozen:

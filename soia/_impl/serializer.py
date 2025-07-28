@@ -5,11 +5,10 @@ from functools import cached_property
 from typing import Any, Generic, TypeVar, cast, final
 from weakref import WeakValueDictionary
 
+from soia import reflection
 from soia._impl.function_maker import Expr, LineSpan, make_function
 from soia._impl.never import Never
 from soia._impl.type_adapter import TypeAdapter
-
-from soia import reflection
 
 T = TypeVar("T")
 

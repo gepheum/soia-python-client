@@ -160,5 +160,4 @@ class _AiohttpClientSession(Protocol):
         *,
         data: str,
         headers: Mapping[str, str],
-    ) -> Any:
-        ...
+    ) -> Any: ...

@@ -3,11 +3,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final, final
 
+from soia import _spec, reflection
 from soia._impl.function_maker import Expr, ExprLike
 from soia._impl.timestamp import Timestamp
 from soia._impl.type_adapter import TypeAdapter
-
-from soia import _spec, reflection
 
 
 class AbstractPrimitiveAdapter(TypeAdapter):
@@ -24,6 +23,10 @@ class AbstractPrimitiveAdapter(TypeAdapter):
         registry: dict[str, reflection.Record],
     ) -> None:
         pass
+
+    @final
+    def frozen_class_of_struct(self) -> type | None:
+        return None
 
 
 class _BoolAdapter(AbstractPrimitiveAdapter):

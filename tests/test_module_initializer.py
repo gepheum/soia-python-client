@@ -698,6 +698,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
         serializer = primary_color_cls.SERIALIZER
         self.assertEqual(serializer.to_json(unknown), 0)
         self.assertEqual(serializer.to_json(unknown, readable=True), "?")
+        self.assertFalse(bool(unknown))
+        self.assertTrue(bool(primary_color_cls.RED))
 
     def test_enum_user_defined_constant(self):
         module = self.init_test_module()
@@ -740,6 +742,29 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(json_object.value, json_object_cls.DEFAULT)
         self.assertEqual(
             json_object, json_value_cls.wrap_object(json_object_cls.DEFAULT)
+        )
+
+    def test_enum_wrap_around_created_struct(self):
+        module = self.init_test_module()
+        json_value_cls = module["JsonValue"]
+        json_object_entry_cls = json_value_cls.ObjectEntry
+        json_object = json_value_cls.create_object(
+            entries=[
+                json_object_entry_cls(
+                    name="a",
+                    value=json_value_cls.wrap_string("b"),
+                )
+            ],
+        )
+        self.assertEqual(json_object.kind, "object")
+        self.assertEqual(
+            json_object.value.entries,
+            (
+                json_object_entry_cls(
+                    name="a",
+                    value=json_value_cls.wrap_string("b"),
+                ),
+            ),
         )
 
     def test_enum_to_json(self):

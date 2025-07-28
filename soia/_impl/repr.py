@@ -10,7 +10,7 @@ class ReprResult:
 
     @property
     def indented(self) -> str:
-        if complex:
+        if self.complex:
             return self.repr.replace("\n", "\n  ")
         else:
             return self.repr

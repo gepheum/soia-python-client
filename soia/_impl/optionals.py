@@ -3,10 +3,9 @@ from dataclasses import dataclass
 from typing import TypeVar
 from weakref import WeakValueDictionary
 
+from soia import _spec, reflection
 from soia._impl.function_maker import Expr, ExprLike
 from soia._impl.type_adapter import TypeAdapter
-
-from soia import _spec, reflection
 
 Other = TypeVar("Other")
 
@@ -79,6 +78,9 @@ class _OptionalAdapter(TypeAdapter):
         registry: dict[str, reflection.Record],
     ) -> None:
         self.other_adapter.register_records(registry)
+
+    def frozen_class_of_struct(self) -> type | None:
+        return None
 
 
 _other_adapter_to_optional_adapter: WeakValueDictionary[TypeAdapter, TypeAdapter] = (
