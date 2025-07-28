@@ -130,9 +130,7 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
             try:
                 req_body_json = json.loads(self.req_body)
             except json.JSONDecodeError:
-                return RawServiceResponse(
-                    "bad request: invalid JSON", "bad-request"
-                )
+                return RawServiceResponse("bad request: invalid JSON", "bad-request")
             method = req_body_json.get("method", ())
             if method == ():
                 return RawServiceResponse(
