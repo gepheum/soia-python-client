@@ -184,3 +184,34 @@ def make_decode_number_fn(
 decode_int64: Final[Callable[[ByteStream], int]] = make_decode_number_fn(
     "int64", is_method=False
 )
+
+
+def decode_unused(stream: ByteStream) -> None:
+    wire = stream.read_wire()
+    if wire < 232:
+        return
+    wire_offset = wire - 232
+    if wire_offset in (0, 4):  # uint16, uint16 - 65536
+        stream.position += 2
+    elif wire_offset in (1, 5, 8):  # uint32, int32, float32
+        stream.position += 4
+    elif wire_offset in (2, 6, 7, 9):  # uint64, int64, uint64 timestamp, float64
+        stream.position += 8
+    elif wire_offset == 3:  # uint8 - 256
+        stream.position += 1
+    elif wire_offset in (11, 13):  # string, bytes
+        length = decode_int64(stream)
+        stream.position += length
+    elif wire_offset in (15, 19, 20, 21, 22):  # array length==1, enum value kind==1-4
+        decode_unused(stream)
+    elif wire_offset == 16:  # array length==2
+        decode_unused(stream)
+        decode_unused(stream)
+    elif wire_offset == 17:  # array length==3
+        decode_unused(stream)
+        decode_unused(stream)
+        decode_unused(stream)
+    elif wire_offset == 18:  # array length==N
+        length = decode_int64(stream)
+        for _ in range(length):
+            decode_unused(stream)
