@@ -1,11 +1,37 @@
 from collections.abc import Callable
-from typing import Protocol
+from dataclasses import dataclass
+from typing import Generic, Protocol, TypeVar
 
 from soia import _spec, reflection
 from soia._impl.function_maker import ExprLike
 
 
-class TypeAdapter(Protocol):
+T = TypeVar("T")
+
+
+@dataclass(frozen=False)
+class ByteStream:
+    __slots__ = ("buffer", "position")
+
+    buffer: bytes
+    position: int
+
+    def __init__(self, buffer: bytes):
+        self.buffer = buffer
+        self.position = 0
+
+    def read_wire(self) -> int:
+        wire = self.buffer[self.position]
+        self.position += 1
+        return wire
+
+    def read(self, length: int) -> bytes:
+        data = self.buffer[self.position : self.position + length]
+        self.position += length
+        return data
+
+
+class TypeAdapter(Protocol, Generic[T]):
     def default_expr(self) -> ExprLike:
         """
         The default value for T.
@@ -48,6 +74,17 @@ class TypeAdapter(Protocol):
         The 'json_expr' arg is obtained by calling 'json.loads()'.
         """
         ...
+
+    def encode(
+        self,
+        value: T,
+        buffer: bytearray,
+    ) -> None: ...
+
+    def decode(
+        self,
+        stream: ByteStream,
+    ) -> T: ...
 
     def finalize(
         self,

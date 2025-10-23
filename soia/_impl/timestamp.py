@@ -146,11 +146,10 @@ class Timestamp:
             dt = self.to_datetime_or_raise()
         except Exception:
             return ""
-        if dt:
-            ret = dt.isoformat()
-            bad_suffix = "+00:00"
-            if ret.endswith(bad_suffix):
-                ret = ret[0 : -len(bad_suffix)] + "Z"
+        ret = dt.isoformat()
+        bad_suffix = "+00:00"
+        if ret.endswith(bad_suffix):
+            ret = ret[0 : -len(bad_suffix)] + "Z"
         return ret
 
 
