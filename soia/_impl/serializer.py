@@ -24,7 +24,7 @@ class Serializer(Generic[T]):
         "__dict__",
     )
 
-    _adapter: TypeAdapter
+    _adapter: TypeAdapter[T]
     _to_dense_json_fn: Callable[[T], Any]
     _to_readable_json_fn: Callable[[T], Any]
     _from_json_fn: Callable[[Any], T]
@@ -82,13 +82,13 @@ _type_adapter_to_serializer: WeakValueDictionary[TypeAdapter, Serializer] = (
 )
 
 
-def make_serializer(adapter: TypeAdapter) -> Serializer:
+def make_serializer(adapter: TypeAdapter[T]) -> Serializer[T]:
     return _type_adapter_to_serializer.setdefault(
         adapter, Serializer(cast(Never, adapter))
     )
 
 
-def _make_to_json_fn(adapter: TypeAdapter, readable: bool) -> Callable[[Any], Any]:
+def _make_to_json_fn(adapter: TypeAdapter[T], readable: bool) -> Callable[[T], Any]:
     return make_function(
         name="to_json",
         params=["input"],
@@ -104,7 +104,7 @@ def _make_to_json_fn(adapter: TypeAdapter, readable: bool) -> Callable[[Any], An
     )
 
 
-def _make_from_json_fn(adapter: TypeAdapter) -> Callable[[Any], Any]:
+def _make_from_json_fn(adapter: TypeAdapter[T]) -> Callable[[Any], T]:
     return make_function(
         name="from_json",
         params=["json"],

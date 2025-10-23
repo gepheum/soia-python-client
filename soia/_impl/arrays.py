@@ -4,15 +4,16 @@ from typing import Generic, Optional
 from weakref import WeakValueDictionary
 
 from soia import _spec, reflection
+from soia._impl.binary import decode_int64, encode_length_prefix
 from soia._impl.function_maker import Any, Expr, ExprLike, Line, make_function
 from soia._impl.keyed_items import Item, Key, KeyedItems
-from soia._impl.type_adapter import TypeAdapter
+from soia._impl.type_adapter import T, ByteStream, TypeAdapter
 
 
 def get_array_adapter(
-    item_adapter: TypeAdapter,
+    item_adapter: TypeAdapter[T],
     key_attributes: tuple[str, ...],
-) -> TypeAdapter:
+) -> TypeAdapter[tuple[T, ...]]:
     if key_attributes:
         default_expr = item_adapter.default_expr()
         listuple_class = _new_keyed_items_class(key_attributes, default_expr)
@@ -24,7 +25,7 @@ def get_array_adapter(
     )
 
 
-class _ArrayAdapter(TypeAdapter):
+class _ArrayAdapter(Generic[T], TypeAdapter[tuple[T, ...]]):
     __slots__ = (
         "item_adapter",
         "listuple_class",
@@ -32,13 +33,13 @@ class _ArrayAdapter(TypeAdapter):
         "empty_listuple",
     )
 
-    item_adapter: TypeAdapter
+    item_adapter: TypeAdapter[T]
     listuple_class: type
     empty_listuple: tuple[()]
 
     def __init__(
         self,
-        item_adapter: TypeAdapter,
+        item_adapter: TypeAdapter[T],
         listuple_class: type,
         key_attributes: tuple[str, ...],
     ):
@@ -99,6 +100,40 @@ class _ArrayAdapter(TypeAdapter):
             "] or ",
             empty_listuple_local,
             ")",
+        )
+
+    def encode(
+        self,
+        value: tuple[T, ...],
+        buffer: bytearray,
+    ) -> None:
+        if not value:
+            buffer.append(246)
+            return
+        length = len(value)
+        if length <= 3:
+            buffer.append(246 + length)
+        else:
+            buffer.append(250)
+            encode_length_prefix(length, buffer)
+        encode_item = self.item_adapter.encode
+        for i in range(length):
+            encode_item(value[i], buffer)
+
+    def decode(
+        self,
+        stream: ByteStream,
+    ) -> tuple[T, ...]:
+        wire = stream.read_wire()
+        if wire in (0, 246):
+            return self.empty_listuple
+        length: int
+        if wire == 250:
+            length = decode_int64(stream)
+        else:
+            length = wire - 246
+        return self.listuple_class(
+            self.item_adapter.decode(stream) for _ in range(length)
         )
 
     def finalize(
