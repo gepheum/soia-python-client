@@ -1,23 +1,21 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Generic
 from weakref import WeakValueDictionary
 
 from soia import _spec, reflection
 from soia._impl.function_maker import Expr, ExprLike
-from soia._impl.type_adapter import TypeAdapter
-
-Other = TypeVar("Other")
+from soia._impl.type_adapter import T, ByteStream, TypeAdapter
 
 
-def get_optional_adapter(other_adapter: TypeAdapter) -> TypeAdapter:
+def get_optional_adapter(other_adapter: TypeAdapter[T]) -> TypeAdapter[T | None]:
     return _other_adapter_to_optional_adapter.setdefault(
         other_adapter, _OptionalAdapter(other_adapter)
     )
 
 
 @dataclass(frozen=True)
-class _OptionalAdapter(TypeAdapter):
+class _OptionalAdapter(Generic[T], TypeAdapter[T | None]):
     __slots__ = ("other_adapter",)
 
     other_adapter: TypeAdapter
@@ -60,6 +58,26 @@ class _OptionalAdapter(TypeAdapter):
             other_from_json,
             ")",
         )
+
+    def encode(
+        self,
+        value: T | None,
+        buffer: bytearray,
+    ) -> None:
+        if value is None:
+            buffer.append(255)
+        else:
+            self.other_adapter.encode(value, buffer)
+
+    def decode(
+        self,
+        stream: ByteStream,
+    ) -> T | None:
+        if stream.buffer[stream.position] == 255:
+            stream.position += 1
+            return None
+        else:
+            return self.other_adapter.decode(stream)
 
     def finalize(
         self,
