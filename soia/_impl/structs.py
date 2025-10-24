@@ -769,7 +769,8 @@ def _make_encode_fn(
         missing_slots = number - last_number - 1
         if missing_slots >= 1:
             # There are removed fields between last_number and number.
-            builder.append_ln(f"buffer.extend(b'{'0' * (missing_slots)}')")
+            zeros = "\\0" * (missing_slots)
+            builder.append_ln(f"buffer.extend(b'{zeros}')")
         builder.append_ln(
             Expr.local(f"encode_{field.field.name}", field.type.encode_fn()),
             f"self.{field.field.attribute}",
@@ -780,7 +781,8 @@ def _make_encode_fn(
     num_slots_excl_removed = last_number + 1
     if num_slots_excl_removed < num_slots_incl_removed:
         missing_slots = num_slots_incl_removed - num_slots_excl_removed
-        builder.append_ln(f"buffer.extend(b'{'0' * (missing_slots)}')")
+        zeros = "\\0" * (missing_slots)
+        builder.append_ln(f"buffer.extend(b'{zeros}')")
     builder.append_ln("buffer.extend(self._unrecognized.raw_bytes)")
     return make_function(
         name="encode",

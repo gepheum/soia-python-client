@@ -1,15 +1,16 @@
 import copy
 from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
-from typing import Any, Final, Union
+from typing import Any, Final, Generic, Union
 
 from soia import _spec, reflection
+from soia._impl.binary import encode_int64
 from soia._impl.function_maker import BodyBuilder, Expr, ExprLike, Line, make_function
 from soia._impl.repr import repr_impl
-from soia._impl.type_adapter import TypeAdapter
+from soia._impl.type_adapter import T, TypeAdapter
 
 
-class EnumAdapter(TypeAdapter):
+class EnumAdapter(Generic[T], TypeAdapter[T]):
     __slots__ = (
         "spec",
         "gen_class",
@@ -127,6 +128,9 @@ class EnumAdapter(TypeAdapter):
                 Expr.local("_cls?", self.gen_class), f".{fn_name}(", json_expr, ")"
             )
 
+    def encode_fn(self) -> Callable[[Any, bytearray], None]:
+        return _encode_impl
+
     def get_type(self) -> reflection.Type:
         return reflection.RecordType(
             kind="record",
@@ -209,6 +213,9 @@ def _make_base_class(spec: _spec.Enum) -> type:
 
 
 def _make_constant_class(base_class: type, spec: _spec.ConstantField) -> type:
+    byte_array = bytearray()
+    encode_int64(spec.number, byte_array)
+
     class Constant(base_class):
         __slots__ = ()
 
@@ -220,6 +227,7 @@ def _make_constant_class(base_class: type, spec: _spec.ConstantField) -> type:
         _rj: Final[str] = spec.name
         # has value
         _hv: Final[bool] = False
+        _bytes: Final[bytes | None] = bytes(byte_array)
 
         def __init__(self):
             # Do not call super().__init__().
@@ -239,20 +247,22 @@ def _make_unrecognized_class(base_class: type) -> type:
     """
 
     class Unrecognized(base_class):
-        __slots__ = ("_dj",)
+        __slots__ = ("_dj", "_bytes")
 
         kind: Final[str] = "?"
         _number: Final[int] = 0
         # dense JSON
-        _dj: Any
+        _dj: list[Any] | int
+        _bytes: bytes
         # readable JSON
         _rj: Final[str] = "?"
         # has value
         _hv: Final[bool] = False
 
-        def __init__(self, dj: Any):
+        def __init__(self, dj: list[Any] | int, bytes: bytes):
             # Do not call super().__init__().
             object.__setattr__(self, "_dj", copy.deepcopy(dj))
+            object.__setattr__(self, "_bytes", bytes)
             object.__setattr__(self, "value", None)
 
         def __repr__(self) -> str:
@@ -319,7 +329,36 @@ def _make_value_class(
         )
     )
 
+    bytes_prefix = bytearray()
+    if number in range(1, 5):
+        bytes_prefix.append(250 + number)
+    else:
+        bytes_prefix.append(248)
+        encode_int64(number, bytes_prefix)
+
+    ret._enc = make_function(
+        name="encode",
+        params=["self", "buffer"],
+        body=[
+            f"buffer.extend({bytes_prefix})",
+            Line.join(
+                Expr.local("encode_value", field_type.encode_fn()),
+                "(self.value, buffer)",
+            ),
+        ],
+    )
+
     return ret
+
+
+def _encode_impl(
+    value: Any,
+    buffer: bytearray,
+) -> None:
+    if value._bytes:
+        buffer.extend(value._bytes)
+    else:
+        value._enc(buffer)
 
 
 @dataclass(frozen=True)
@@ -412,7 +451,7 @@ def _make_from_json_fn(
         if removed_numbers:
             builder.append_ln("      if json in ", removed_numbers_local, ":")
             builder.append_ln("        return ", unknown_constant_local)
-        builder.append_ln("      return ", unrecognized_class_local, "(json)")
+        builder.append_ln("      return ", unrecognized_class_local, "(json, b'\\0')")
 
     def append_number_branches(numbers: list[int], indent: str) -> None:
         if len(numbers) == 1:
@@ -443,7 +482,7 @@ def _make_from_json_fn(
         if removed_numbers:
             builder.append_ln("    if number in ", removed_numbers_local, ":")
             builder.append_ln("      return ", unknown_constant_local)
-        builder.append_ln("    return ", unrecognized_class_local, "(json)")
+        builder.append_ln("    return ", unrecognized_class_local, "(json, b'\\0')")
     else:
         if len(value_fields) == 1:
             builder.append_ln(f"    if number != {value_fields[0].spec.number}:")
@@ -452,7 +491,7 @@ def _make_from_json_fn(
         if removed_numbers:
             builder.append_ln("      if number in ", removed_numbers_local, ":")
             builder.append_ln("        return ", unknown_constant_local)
-        builder.append_ln("      return ", unrecognized_class_local, "(json)")
+        builder.append_ln("      return ", unrecognized_class_local, "(json, b'\\0')")
         append_number_branches(sorted(numbers), "    ")
 
     # READABLE FORMAT
