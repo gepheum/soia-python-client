@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Generic
 from weakref import WeakValueDictionary
 
@@ -59,25 +60,41 @@ class _OptionalAdapter(Generic[T], TypeAdapter[T | None]):
             ")",
         )
 
-    def encode(
-        self,
-        value: T | None,
-        buffer: bytearray,
-    ) -> None:
-        if value is None:
-            buffer.append(255)
-        else:
-            self.other_adapter.encode(value, buffer)
+    @cached_property
+    def encode_fn_impl(self) -> Callable[[T | None, bytearray], None]:
+        encode_value = self.other_adapter.encode_fn()
 
-    def decode(
-        self,
-        stream: ByteStream,
-    ) -> T | None:
-        if stream.buffer[stream.position] == 255:
-            stream.position += 1
-            return None
-        else:
-            return self.other_adapter.decode(stream)
+        def encode(
+            value: T | None,
+            buffer: bytearray,
+        ) -> None:
+            if value is None:
+                buffer.append(255)
+            else:
+                encode_value(value, buffer)
+
+        return encode
+
+    def encode_fn(self) -> Callable[[T | None, bytearray], None]:
+        return self.encode_fn_impl
+
+    @cached_property
+    def decode_fn_impl(self) -> Callable[[ByteStream], T | None]:
+        decode_value = self.other_adapter.decode_fn()
+
+        def decode(
+            stream: ByteStream,
+        ) -> T | None:
+            if stream.buffer[stream.position] == 255:
+                stream.position += 1
+                return None
+            else:
+                return decode_value(stream)
+
+        return decode
+
+    def decode_fn(self) -> Callable[[ByteStream], T | None]:
+        return self.decode_fn_impl
 
     def finalize(
         self,

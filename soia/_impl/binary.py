@@ -27,6 +27,44 @@ def encode_int32(input_val: int, buffer: bytearray) -> None:
         buffer.extend(struct.pack("<I", input_val))
 
 
+def encode_int64(value: int, buffer: bytearray) -> None:
+    if -2147483648 <= value <= 2147483647:
+        encode_int32(value, buffer)
+    else:
+        buffer.append(238)
+        buffer.extend(struct.pack("<q", value))
+
+
+def encode_uint64(value: int, buffer: bytearray) -> None:
+    if value < 232:
+        buffer.append(value)
+    elif value < 65536:
+        buffer.append(232)
+        buffer.extend(struct.pack("<H", value))
+    elif value < 4294967296:
+        buffer.append(233)
+        buffer.extend(struct.pack("<I", value))
+    else:
+        buffer.append(234)
+        buffer.extend(struct.pack("<Q", value))
+
+
+def encode_float32(value: float, buffer: bytearray) -> None:
+    if value == 0.0:
+        buffer.append(0)
+    else:
+        buffer.append(240)
+        buffer.extend(struct.pack("<f", value))
+
+
+def encode_float64(value: float, buffer: bytearray) -> None:
+    if value == 0.0:
+        buffer.append(0)
+    else:
+        buffer.append(241)
+        buffer.extend(struct.pack("<d", value))
+
+
 def encode_length_prefix(length: int, buffer: bytearray) -> None:
     """Encode a length prefix using variable-length encoding."""
     if length < 232:
@@ -52,7 +90,6 @@ def make_decode_number_fn(
         "uint64",
         "float",
     ],
-    is_method: bool,
 ) -> Callable:
     target_min_int: int
     target_max_int: int
@@ -96,7 +133,8 @@ def make_decode_number_fn(
             return Expr.join(Expr.local("clamp", clamp), f"({raw})")
 
     body_builder = BodyBuilder()
-    body_builder.append_ln("wire = stream.read_wire()")
+    body_builder.append_ln("wire = stream.bytes[stream.position]")
+    body_builder.append_ln("stream.position += 1")
     body_builder.append_ln("if wire < 232:")
     body_builder.append_ln(" return ", make_return_expr("wire", 0, 231, False))
     body_builder.append_ln("elif wire <= 236:")  # 232-236
@@ -176,14 +214,16 @@ def make_decode_number_fn(
 
     return make_function(
         f"decode_{target_type}",
-        ["self", "stream"] if is_method else ["stream"],
+        ["stream"],
         body_builder.build(),
     )
 
 
-decode_int64: Final[Callable[[ByteStream], int]] = make_decode_number_fn(
-    "int64", is_method=False
-)
+decode_bool: Final[Callable[[ByteStream], bool]] = make_decode_number_fn("float")
+decode_int32: Final[Callable[[ByteStream], int]] = make_decode_number_fn("int32")
+decode_int64: Final[Callable[[ByteStream], int]] = make_decode_number_fn("int64")
+decode_uint64: Final[Callable[[ByteStream], int]] = make_decode_number_fn("uint64")
+decode_float: Final[Callable[[ByteStream], float]] = make_decode_number_fn("float")
 
 
 def decode_unused(stream: ByteStream) -> None:

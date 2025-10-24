@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError
+from functools import cached_property
 from typing import Generic, Optional
 from weakref import WeakValueDictionary
 
@@ -102,39 +103,52 @@ class _ArrayAdapter(Generic[T], TypeAdapter[tuple[T, ...]]):
             ")",
         )
 
-    def encode(
-        self,
-        value: tuple[T, ...],
-        buffer: bytearray,
-    ) -> None:
-        if not value:
-            buffer.append(246)
-            return
-        length = len(value)
-        if length <= 3:
-            buffer.append(246 + length)
-        else:
-            buffer.append(250)
-            encode_length_prefix(length, buffer)
-        encode_item = self.item_adapter.encode
-        for i in range(length):
-            encode_item(value[i], buffer)
+    @cached_property
+    def encode_fn_impl(self) -> Callable[[tuple[T, ...], bytearray], None]:
+        encode_item = self.item_adapter.encode_fn()
 
-    def decode(
-        self,
-        stream: ByteStream,
-    ) -> tuple[T, ...]:
-        wire = stream.read_wire()
-        if wire in (0, 246):
-            return self.empty_listuple
-        length: int
-        if wire == 250:
-            length = decode_int64(stream)
-        else:
-            length = wire - 246
-        return self.listuple_class(
-            self.item_adapter.decode(stream) for _ in range(length)
-        )
+        def encode(
+            value: tuple[T, ...],
+            buffer: bytearray,
+        ) -> None:
+            if not value:
+                buffer.append(246)
+                return
+            length = len(value)
+            if length <= 3:
+                buffer.append(246 + length)
+            else:
+                buffer.append(250)
+                encode_length_prefix(length, buffer)
+            for i in range(length):
+                encode_item(value[i], buffer)
+
+        return encode
+
+    def encode_fn(self) -> Callable[[tuple[T, ...], bytearray], None]:
+        return self.encode_fn_impl
+
+    @cached_property
+    def decode_fn_impl(self) -> Callable[[ByteStream], tuple[T, ...]]:
+        decode_item = self.item_adapter.decode_fn()
+
+        def decode(
+            stream: ByteStream,
+        ) -> tuple[T, ...]:
+            wire = stream.read_wire()
+            if wire in (0, 246):
+                return self.empty_listuple
+            length: int
+            if wire == 250:
+                length = decode_int64(stream)
+            else:
+                length = wire - 246
+            return self.listuple_class(decode_item(stream) for _ in range(length))
+
+        return decode
+
+    def decode_fn(self) -> Callable[[ByteStream], tuple[T, ...]]:
+        return self.decode_fn_impl
 
     def finalize(
         self,

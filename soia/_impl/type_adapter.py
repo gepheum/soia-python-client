@@ -75,16 +75,13 @@ class TypeAdapter(Protocol, Generic[T]):
         """
         ...
 
-    def encode(
+    def encode_fn(
         self,
-        value: T,
-        buffer: bytearray,
-    ) -> None: ...
+    ) -> Callable[[T, bytearray], None]: ...
 
-    def decode(
+    def decode_fn(
         self,
-        stream: ByteStream,
-    ) -> T: ...
+    ) -> Callable[[ByteStream], T]: ...
 
     def finalize(
         self,

@@ -6,10 +6,17 @@ from typing import Any, Final, final
 
 from soia import _spec, reflection
 from soia._impl.binary import (
+    decode_bool,
+    decode_float,
+    decode_int32,
     decode_int64,
+    decode_uint64,
+    encode_float32,
+    encode_float64,
     encode_int32,
+    encode_int64,
     encode_length_prefix,
-    make_decode_number_fn,
+    encode_uint64,
 )
 from soia._impl.function_maker import Expr, ExprLike
 from soia._impl.timestamp import Timestamp
@@ -59,26 +66,24 @@ class _BoolAdapter(AbstractPrimitiveAdapter[bool]):
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
         return Expr.join("(True if ", json_expr, " else False)")
 
+    @staticmethod
     def encode(
-        self,
         value: bool,
         buffer: bytearray,
     ) -> None:
         buffer.append(1 if value else 0)
 
-    def decode(
-        self,
-        stream: ByteStream,
-    ) -> bool: ...
+    def encode_fn(self) -> Callable[[bool, bytearray], None]:
+        return _BoolAdapter.encode
+
+    def decode_fn(self) -> Callable[[ByteStream], bool]:
+        return decode_bool
 
     def get_type(self) -> reflection.Type:
         return reflection.PrimitiveType(
             kind="primitive",
             value="bool",
         )
-
-
-_BoolAdapter.decode = make_decode_number_fn("bool", is_method=True)
 
 
 BOOL_ADAPTER: Final[TypeAdapter[bool]] = _BoolAdapter()
@@ -120,26 +125,17 @@ class _Int32Adapter(_AbstractIntAdapter):
             " < 2147483647 else 2147483647)",
         )
 
-    def encode(
-        self,
-        value: int,
-        buffer: bytearray,
-    ) -> None:
-        encode_int32(value, buffer)
+    def encode_fn(self) -> Callable[[int, bytearray], None]:
+        return encode_int32
 
-    def decode(
-        self,
-        stream: ByteStream,
-    ) -> int: ...
+    def decode_fn(self) -> Callable[[ByteStream], int]:
+        return decode_int32
 
     def get_type(self) -> reflection.Type:
         return reflection.PrimitiveType(
             kind="primitive",
             value="int32",
         )
-
-
-_Int32Adapter.decode = make_decode_number_fn("int32", is_method=True)
 
 
 def _int64_to_json(i: int) -> int | str:
@@ -161,30 +157,17 @@ class _Int64Adapter(_AbstractIntAdapter):
     def to_json_expr(self, in_expr: ExprLike, readable: bool) -> Expr:
         return Expr.join(Expr.local("int64_to_json", _int64_to_json), "(", in_expr, ")")
 
-    def encode(
-        self,
-        value: int,
-        buffer: bytearray,
-    ) -> None:
-        if -2147483648 <= value <= 2147483647:
-            encode_int32(value, buffer)
-        else:
-            buffer.append(238)
-            buffer.extend(struct.pack("<q", value))
+    def encode_fn(self) -> Callable[[int, bytearray], None]:
+        return encode_int64
 
-    def decode(
-        self,
-        stream: ByteStream,
-    ) -> int: ...
+    def decode_fn(self) -> Callable[[ByteStream], int]:
+        return decode_int64
 
     def get_type(self) -> reflection.Type:
         return reflection.PrimitiveType(
             kind="primitive",
             value="int64",
         )
-
-
-_Int64Adapter.decode = make_decode_number_fn("int64", is_method=True)
 
 
 def _uint64_to_json(i: int) -> int | str:
@@ -205,36 +188,17 @@ class _Uint64Adapter(_AbstractIntAdapter):
             Expr.local("uint64_to_json", _uint64_to_json), "(", in_expr, ")"
         )
 
-    def encode(
-        self,
-        value: int,
-        buffer: bytearray,
-    ) -> None:
-        if value < 232:
-            buffer.append(value)
-        elif value < 65536:
-            buffer.append(232)
-            buffer.extend(struct.pack("<H", value))
-        elif value < 4294967296:
-            buffer.append(233)
-            buffer.extend(struct.pack("<I", value))
-        else:
-            buffer.append(234)
-            buffer.extend(struct.pack("<Q", value))
+    def encode_fn(self) -> Callable[[int, bytearray], None]:
+        return encode_uint64
 
-    def decode(
-        self,
-        stream: ByteStream,
-    ) -> int: ...
+    def decode_fn(self) -> Callable[[ByteStream], int]:
+        return decode_uint64
 
     def get_type(self) -> reflection.Type:
         return reflection.PrimitiveType(
             kind="primitive",
             value="uint64",
         )
-
-
-_Uint64Adapter.decode = make_decode_number_fn("uint64", is_method=True)
 
 
 INT32_ADAPTER: Final[TypeAdapter[int]] = _Int32Adapter()
@@ -261,29 +225,16 @@ class _AbstractFloatAdapter(AbstractPrimitiveAdapter[float]):
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
         return Expr.join("(", json_expr, " + 0.0)")
 
-    def decode(
-        self,
-        stream: ByteStream,
-    ) -> float: ...
-
-
-_AbstractFloatAdapter.decode = make_decode_number_fn("float", is_method=True)
+    def decode_fn(self) -> Callable[[ByteStream], float]:
+        return decode_float
 
 
 @dataclass(frozen=True)
 class _Float32Adapter(_AbstractFloatAdapter):
     """Type adapter implementation for float32."""
 
-    def encode(
-        self,
-        value: float,
-        buffer: bytearray,
-    ) -> None:
-        if value == 0.0:
-            buffer.append(0)
-        else:
-            buffer.append(240)
-            buffer.extend(struct.pack("<f", value))
+    def encode_fn(self) -> Callable[[float, bytearray], None]:
+        return encode_float32
 
     def get_type(self) -> reflection.Type:
         return reflection.PrimitiveType(
@@ -296,16 +247,8 @@ class _Float32Adapter(_AbstractFloatAdapter):
 class _Float64Adapter(_AbstractFloatAdapter):
     """Type adapter implementation for float64."""
 
-    def encode(
-        self,
-        value: float,
-        buffer: bytearray,
-    ) -> None:
-        if value == 0.0:
-            buffer.append(0)
-        else:
-            buffer.append(241)
-            buffer.extend(struct.pack("<d", value))
+    def encode_fn(self) -> Callable[[float, bytearray], None]:
+        return encode_float64
 
     def get_type(self) -> reflection.Type:
         return reflection.PrimitiveType(
@@ -356,8 +299,8 @@ class _TimestampAdapter(AbstractPrimitiveAdapter[Timestamp]):
         fn = Expr.local("_timestamp_from_json", _timestamp_from_json)
         return Expr.join(fn, "(", json_expr, ")")
 
+    @staticmethod
     def encode(
-        self,
         value: Timestamp,
         buffer: bytearray,
     ) -> None:
@@ -368,11 +311,15 @@ class _TimestampAdapter(AbstractPrimitiveAdapter[Timestamp]):
             buffer.append(239)
             buffer.extend(struct.pack("<q", unix_millis))
 
-    def decode(
-        self,
-        stream: ByteStream,
-    ) -> Timestamp:
+    def encode_fn(self) -> Callable[[Timestamp, bytearray], None]:
+        return _TimestampAdapter.encode
+
+    @staticmethod
+    def decode(stream: ByteStream) -> Timestamp:
         return Timestamp(unix_millis=_clamp_unix_millis(decode_int64(stream)))
+
+    def decode_fn(self) -> Callable[[ByteStream], Timestamp]:
+        return _TimestampAdapter.decode
 
     def get_type(self) -> reflection.Type:
         return reflection.PrimitiveType(
@@ -407,8 +354,8 @@ class _StringAdapter(AbstractPrimitiveAdapter[str]):
     def from_json_expr(self, json_expr: ExprLike) -> Expr:
         return Expr.join("('' + (", json_expr, " or ''))")
 
+    @staticmethod
     def encode(
-        self,
         value: str,
         buffer: bytearray,
     ) -> None:
@@ -421,10 +368,11 @@ class _StringAdapter(AbstractPrimitiveAdapter[str]):
             encode_length_prefix(length, buffer)
             buffer.extend(bytes_data)
 
-    def decode(
-        self,
-        stream: ByteStream,
-    ) -> str:
+    def encode_fn(self) -> Callable[[str, bytearray], None]:
+        return _StringAdapter.encode
+
+    @staticmethod
+    def decode(stream: ByteStream) -> str:
         wire = stream.read(1)[0]
         if wire == 242:
             return ""
@@ -433,6 +381,9 @@ class _StringAdapter(AbstractPrimitiveAdapter[str]):
             length = decode_int64(stream)
             bytes_data = stream.read(length)
             return bytes_data.decode("utf-8")
+
+    def decode_fn(self) -> Callable[[ByteStream], str]:
+        return _StringAdapter.decode
 
     def get_type(self) -> reflection.Type:
         return reflection.PrimitiveType(
@@ -471,8 +422,8 @@ class _BytesAdapter(AbstractPrimitiveAdapter[bytes]):
             Expr.local("b64decode", base64.b64decode), "(", json_expr, ' or "")'
         )
 
+    @staticmethod
     def encode(
-        self,
         value: bytes,
         buffer: bytearray,
     ) -> None:
@@ -484,10 +435,11 @@ class _BytesAdapter(AbstractPrimitiveAdapter[bytes]):
             encode_length_prefix(length, buffer)
             buffer.extend(value)
 
-    def decode(
-        self,
-        stream: ByteStream,
-    ) -> bytes:
+    def encode_fn(self) -> Callable[[bytes, bytearray], None]:
+        return _BytesAdapter.encode
+
+    @staticmethod
+    def decode(stream: ByteStream) -> bytes:
         wire = stream.read_wire()
         if wire in (0, 244):
             return b""
@@ -495,6 +447,9 @@ class _BytesAdapter(AbstractPrimitiveAdapter[bytes]):
             # Should be wire 245
             length = decode_int64(stream)
             return stream.read(length)
+
+    def decode_fn(self) -> Callable[[ByteStream], bytes]:
+        return _BytesAdapter.decode
 
     def get_type(self) -> reflection.Type:
         return reflection.PrimitiveType(

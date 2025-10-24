@@ -1,7 +1,8 @@
 import copy
 from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
-from typing import Any, Final, Union, cast
+import itertools
+from typing import Any, Final, Generic, Union, cast
 
 from soia import _spec, reflection
 from soia._impl.function_maker import (
@@ -17,10 +18,11 @@ from soia._impl.function_maker import (
 )
 from soia._impl.keep import KEEP
 from soia._impl.repr import repr_impl
-from soia._impl.type_adapter import TypeAdapter
+from soia._impl.type_adapter import T, ByteStream, TypeAdapter
+from soia._impl.binary import decode_unused, encode_length_prefix
 
 
-class StructAdapter(TypeAdapter):
+class StructAdapter(Generic[T], TypeAdapter[T]):
     __slots__ = (
         "spec",
         "record_hash",
@@ -43,6 +45,8 @@ class StructAdapter(TypeAdapter):
     # 0: has not started; 1: in progress; 2: done
     finalization_state: int
     fields: tuple["_Field", ...]
+    num_slots_incl_removed: int
+    slot_to_field: list["_Field | None"]
 
     def __init__(self, spec: _spec.Struct):
         self.finalization_state = 0
@@ -82,6 +86,16 @@ class StructAdapter(TypeAdapter):
         # Reason why it's faster: we don't need to call object.__setattr__().
         self.simple_class = _make_dataclass(slots)
 
+        def forward_encode(value: Any, buffer: bytearray) -> None:
+            frozen_class._encode(value, buffer)
+
+        frozen_class._encode = forward_encode
+
+        def forward_decode(stream: ByteStream) -> None:
+            return frozen_class._decode(stream)
+
+        frozen_class._decode = forward_decode
+
     def finalize(
         self,
         resolve_type_fn: Callable[[_spec.Type], TypeAdapter],
@@ -100,6 +114,18 @@ class StructAdapter(TypeAdapter):
             )
         )
 
+        num_slots_incl_removed: Final = max(
+            itertools.chain(
+                (f.field.number + 1 for f in fields),
+                (n + 1 for n in self.spec.removed_numbers),
+                [0],
+            )
+        )
+        self.num_slots_incl_removed = num_slots_incl_removed
+
+        slot_to_field: Final[list[_Field | None]] = [None] * self.num_slots_incl_removed
+        self.slot_to_field = slot_to_field
+
         # Aim to have dependencies finalized *before* the dependent. It's not always
         # possible, because there can be cyclic dependencies.
         # The function returned by the do_x_fn() method of a dependency is marginally
@@ -107,6 +133,7 @@ class StructAdapter(TypeAdapter):
         # this function is a "forwarding" function.
         for field in fields:
             field.type.finalize(resolve_type_fn)
+            self.slot_to_field[field.field.number] = field
 
         frozen_class = self.gen_class
         mutable_class = self.mutable_class
@@ -147,13 +174,29 @@ class StructAdapter(TypeAdapter):
             Any, _make_repr_fn(fields)
         )
 
-        frozen_class._tdj = _make_to_dense_json_fn(fields=fields)
+        frozen_class._tdj = _make_to_dense_json_fn(
+            fields=fields,
+            num_slots_incl_removed=num_slots_incl_removed,
+        )
         frozen_class._trj = _make_to_readable_json_fn(fields=fields)
+        frozen_class._encode = _make_encode_fn(
+            fields=fields,
+            num_slots_incl_removed=num_slots_incl_removed,
+        )
+        frozen_class._decode = _make_decode_fn(
+            frozen_class=frozen_class,
+            simple_class=simple_class,
+            fields=fields,
+            removed_numbers=self.spec.removed_numbers,
+            num_slots_incl_removed=num_slots_incl_removed,
+        )
+
         frozen_class._fj = _make_from_json_fn(
             frozen_class=frozen_class,
             simple_class=simple_class,
             fields=fields,
             removed_numbers=self.spec.removed_numbers,
+            num_slots_incl_removed=self.num_slots_incl_removed,
         )
 
         # Initialize DEFAULT.
@@ -186,7 +229,13 @@ class StructAdapter(TypeAdapter):
         )
 
     def is_not_default_expr(self, arg_expr: ExprLike, attr_expr: ExprLike) -> Expr:
-        return Expr.join(attr_expr, "._array_len")
+        return Expr.join(
+            "(",
+            attr_expr,
+            "._unrecognized or ",
+            attr_expr,
+            "._array_len)",
+        )
 
     def to_json_expr(
         self,
@@ -235,8 +284,14 @@ class StructAdapter(TypeAdapter):
         for field in self.fields:
             field.type.register_records(registry)
 
-    def frozen_class_of_struct(self) -> type | None:
+    def frozen_class_of_struct(self) -> type:
         return self.gen_class
+
+    def encode_fn(self) -> Callable[[T, bytearray], None]:
+        return self.gen_class._encode
+
+    def decode_fn(self) -> Callable[[ByteStream], T]:
+        return self.gen_class._decode
 
 
 class _Frozen:
@@ -316,7 +371,7 @@ def _make_frozen_class_init_fn(
                 ")",
             )
         # Set the _unrecognized field.
-        builder.append_ln(obj_setattr, '(_self, "_unrecognized", ())')
+        builder.append_ln(obj_setattr, '(_self, "_unrecognized", None)')
         # Set array length.
         builder.append_ln(
             obj_setattr,
@@ -343,7 +398,7 @@ def _make_frozen_class_init_fn(
                 field.type.to_frozen_expr(attribute),
             )
         # Set the _unrecognized field.
-        builder.append_ln("_self._unrecognized = ()")
+        builder.append_ln("_self._unrecognized = None")
         # Set array length.
         builder.append_ln("_self._array_len = ", array_len_expr())
         # Change back the __class__.
@@ -377,7 +432,7 @@ def _make_mutable_class_init_fn(fields: Sequence[_Field]) -> Callable[..., None]
             " = ",
             attribute,
         )
-    builder.append_ln("_self._unrecognized = ()")
+    builder.append_ln("_self._unrecognized = None")
     return make_function(
         name="__init__",
         params=params,
@@ -526,26 +581,19 @@ def _make_to_frozen_fn(
     builder.append_ln("ret._unrecognized = self._unrecognized")
 
     def array_len_expr() -> Expr:
-        spans: list[LineSpanLike] = []
-        spans.append(
-            LineSpan.join(
-                f"{_get_num_slots(fields)} + ",
-                Expr.local("_len", len),
-                "(ret._unrecognized) if ret._unrecognized else ",
-            )
-        )
+        exprs: list[ExprLike] = []
         # Fields are sorted by number.
         for field in reversed(fields):
             attr_expr = f"ret.{field.field.attribute}"
-            spans.append(
+            exprs.append(
                 LineSpan.join(
                     f"{field.field.number + 1} if ",
                     field.type.is_not_default_expr(attr_expr, attr_expr),
                     " else ",
                 )
             )
-        spans.append("0")
-        return Expr.join(*spans)
+        exprs.append("0")
+        return Expr.join(*exprs)
 
     # Set the _unrecognized field.
     builder.append_ln("ret._unrecognized = self._unrecognized")
@@ -577,8 +625,14 @@ def _make_eq_fn(
     builder.append_ln("if other.__class__ is self.__class__:")
     operands: list[ExprLike]
     if fields:
-        attr: Callable[[_Field], str] = lambda f: f.field.attribute
-        operands = [Expr.join(f"self.{attr(f)} == other.{attr(f)}") for f in fields]
+
+        def get_attribute(f: _Field) -> str:
+            return f.field.attribute
+
+        operands = [
+            Expr.join(f"self.{get_attribute(f)} == other.{get_attribute(f)}")
+            for f in fields
+        ]
     else:
         operands = ["True"]
     builder.append_ln("  return ", Expr.join(*operands, separator=" and "))
@@ -641,9 +695,13 @@ def _make_repr_fn(fields: Sequence[_Field]) -> Callable[[Any], str]:
     )
 
 
-def _make_to_dense_json_fn(fields: Sequence[_Field]) -> Callable[[Any], Any]:
+def _make_to_dense_json_fn(
+    fields: Sequence[_Field], num_slots_incl_removed: int
+) -> Callable[[Any], Any]:
     builder = BodyBuilder()
-    builder.append_ln("l = self._array_len")
+    builder.append_ln(
+        "l = self._unrecognized.adjusted_json_array_len if self._unrecognized else self._array_len"
+    )
     builder.append_ln("ret = [0] * l")
     for field in fields:
         builder.append_ln(f"if l <= {field.field.number}:")
@@ -655,10 +713,9 @@ def _make_to_dense_json_fn(fields: Sequence[_Field]) -> Callable[[Any], Any]:
                 readable=False,
             ),
         )
-    num_slots = _get_num_slots(fields)
-    builder.append_ln(f"if l <= {num_slots}:")
+    builder.append_ln(f"if l <= {num_slots_incl_removed}:")
     builder.append_ln("  return ret")
-    builder.append_ln(f"ret[{num_slots}:] = self._unrecognized")
+    builder.append_ln(f"ret[{num_slots_incl_removed}:] = self._unrecognized.json")
     builder.append_ln("return ret")
     return make_function(
         name="to_dense_json",
@@ -692,11 +749,52 @@ def _make_to_readable_json_fn(fields: Sequence[_Field]) -> Callable[[Any], Any]:
     )
 
 
+def _make_encode_fn(
+    fields: Sequence[_Field],
+    num_slots_incl_removed: int,
+) -> Callable[[Any, bytearray], None]:
+    builder = BodyBuilder()
+    builder.append_ln(
+        "l = self._unrecognized.adjusted_bytes_array_len if ",
+        "self._unrecognized else self._array_len",
+    )
+    builder.append_ln(
+        Expr.local("_encode_length_prefix", encode_length_prefix), "(l, buffer)"
+    )
+    last_number = -1
+    for field in fields:
+        number = field.field.number
+        builder.append_ln(f"if l <= {number}:")
+        builder.append_ln("  return")
+        missing_slots = number - last_number - 1
+        if missing_slots >= 1:
+            # There are removed fields between last_number and number.
+            builder.append_ln(f"buffer.extend(b'{'0' * (missing_slots)}')")
+        builder.append_ln(
+            Expr.local(f"encode_{field.field.name}", field.type.encode_fn()),
+            f"self.{field.field.attribute}",
+        )
+        last_number = number
+    builder.append_ln(f"if l <= {num_slots_incl_removed}:")
+    builder.append_ln("  return")
+    num_slots_excl_removed = last_number + 1
+    if num_slots_excl_removed < num_slots_incl_removed:
+        missing_slots = num_slots_incl_removed - num_slots_excl_removed
+        builder.append_ln(f"buffer.extend(b'{'0' * (missing_slots)}')")
+    builder.append_ln("buffer.extend(self._unrecognized.raw_bytes)")
+    return make_function(
+        name="encode",
+        params=["self"],
+        body=builder.build(),
+    )
+
+
 def _make_from_json_fn(
     frozen_class: type,
     simple_class: type,
     fields: Sequence[_Field],
     removed_numbers: tuple[int, ...],
+    num_slots_incl_removed: int,
 ) -> Callable[[Any], Any]:
     builder = BodyBuilder()
     builder.append_ln("if not json:")
@@ -716,7 +814,6 @@ def _make_from_json_fn(
         "(json)",
     )
     for field in fields:
-        name = field.field.name
         number = field.field.number
         item_expr = f"json[{number}]"
         builder.append_ln(
@@ -725,9 +822,12 @@ def _make_from_json_fn(
             f" if array_len <= {number} else ",
             field.type.from_json_expr(item_expr),
         )
-    num_slots = _get_num_slots(fields)
-    builder.append_ln(f"  if array_len <= {num_slots}:")
-    builder.append_ln("    ret._unrecognized = ()")
+    if fields:
+        num_slots_excl_removed = fields[-1].field.number + 1
+    else:
+        num_slots_excl_removed = 0
+    builder.append_ln(f"  if array_len <= {num_slots_incl_removed}:")
+    builder.append_ln("    ret._unrecognized = None")
     builder.append_ln(
         "    ret._array_len = ",
         _adjust_array_len_expr("array_len", removed_numbers),
@@ -735,10 +835,12 @@ def _make_from_json_fn(
     builder.append_ln("  else:")
     builder.append_ln(
         "    ret._unrecognized = ",
+        Expr.local("UnrecognizedFields", _UnrecognizedFields.from_json),
+        "(json=",
         Expr.local("deepcopy", copy.deepcopy),
-        f"(json[{num_slots}:])",
+        f"(json[{num_slots_incl_removed}:]), adjusted_json_array_len=array_len)",
     )
-    builder.append_ln("    ret._array_len = array_len")
+    builder.append_ln(f"    ret._array_len = {num_slots_excl_removed}")
 
     builder.append_ln("else:")
     builder.append_ln("  array_len = 0")
@@ -755,7 +857,7 @@ def _make_from_json_fn(
         builder.append_ln("  else:")
         builder.append_ln(f"    {lvalue} = ", field.type.default_expr())
     # Drop unrecognized fields in readable mode.
-    builder.append_ln("  ret._unrecognized = ()")
+    builder.append_ln("  ret._unrecognized = None")
     builder.append_ln("  ret._array_len = array_len")
 
     builder.append_ln("ret.__class__ = ", Expr.local("Frozen", frozen_class))
@@ -764,6 +866,82 @@ def _make_from_json_fn(
     return make_function(
         name="from_json",
         params=["json"],
+        body=builder.build(),
+    )
+
+
+def _make_decode_fn(
+    frozen_class: type,
+    simple_class: type,
+    fields: Sequence[_Field],
+    removed_numbers: tuple[int, ...],
+    num_slots_incl_removed: int,
+) -> Callable[[ByteStream], Any]:
+    builder = BodyBuilder()
+    builder.append_ln("wire = stream.bytes[stream.position]")
+    builder.append_ln("stream.position += 1")
+    builder.append_ln("if wire in (0, 246):")
+    builder.append_ln("  return ", Expr.local("DEFAULT", frozen_class.DEFAULT))
+    builder.append_ln("elif wire == 250:")
+    builder.append_ln("  array_len = decode_int64(stream)")
+    builder.append_ln("else:")
+    builder.append_ln("  array_len = wire - 246")
+    # Create an instance of the simple class. We'll later change its __class__ attr.
+    builder.append_ln(
+        "ret = ",
+        Expr.local("Simple", simple_class),
+        "()",
+    )
+    last_number = -1
+    for field in fields:
+        number = field.field.number
+        for _ in range(number - last_number - 2):
+            builder.append_ln(Expr.local("decode_unused", decode_unused), "(stream)")
+        builder.append_ln(
+            f"ret.{field.field.attribute} = ",
+            field.type.default_expr(),
+            f" if array_len <= {number} else ",
+            Expr.local(f"decode_{field.field.name}", field.type.decode_fn()),
+            "(stream)",
+        )
+        last_number = number
+    num_slots_excl_removed = last_number + 1
+
+    builder.append_ln(f"if array_len > {num_slots_excl_removed}:")
+    builder.append_ln(
+        "  if array_len > {num_slots_incl_removed}:"
+    )  # TODO: and parse unrecognized...
+    for _ in range(num_slots_incl_removed - num_slots_excl_removed):
+        builder.append_ln(Expr.local("    decode_unused", decode_unused), "(stream)")
+    builder.append_ln("    start_offset = stream.position")
+    builder.append_ln("    for _ in range(array_len - {num_slots_incl_removed}):")
+    builder.append_ln("      ", Expr.local("decode_unused", decode_unused), "(stream)")
+    builder.append_ln("    end_offset = stream.position")
+    builder.append_ln(
+        "    ret._unrecognized = ",
+        Expr.local("UnrecognizedFields", _UnrecognizedFields.from_bytes),
+        "(raw_bytes=stream.bytes[start_offset:end_offset], adjusted_bytes_array_len=array_len)",
+    )
+    builder.append_ln("  else:")
+    builder.append_ln(f"    for _ in range(array_len - {num_slots_incl_removed}):")
+    builder.append_ln("      ", Expr.local("decode_unused", decode_unused), "(stream)")
+    builder.append_ln("    ret._unrecognized = None")
+    builder.append_ln("else:")
+    builder.append_ln("  ret._unrecognized = None")
+
+    builder.append_ln(
+        "  ret._array_len = ",
+        _adjust_array_len_expr("array_len", removed_numbers=removed_numbers),
+    )
+
+    builder.append_ln(
+        "ret.__class__ = ",
+        Expr.local("Frozen", frozen_class),
+    )
+    builder.append_ln("return ret")
+    return make_function(
+        name="decode",
+        params=["stream"],
         body=builder.build(),
     )
 
@@ -828,7 +1006,7 @@ def _init_default(default: Any, fields: Sequence[_Field]) -> None:
             body=(Line.join("return ", field.type.default_expr()),),
         )
         object.__setattr__(default, attribute, get_field_default())
-    object.__setattr__(default, "_unrecognized", ())
+    object.__setattr__(default, "_unrecognized", None)
     object.__setattr__(default, "_array_len", 0)
 
 
@@ -876,5 +1054,38 @@ def _name_private_is_frozen_attr(record_id: str) -> str:
     return f"_is_{record_name}_{hex_hash}"
 
 
-def _get_num_slots(fields: Sequence[_Field]) -> int:
-    return (fields[-1].field.number + 1) if fields else 0
+@dataclass(frozen=True)
+class _UnrecognizedFields:
+    __slots__ = (
+        "json",
+        "raw_bytes",
+        "adjusted_json_array_len",
+        "adjusted_bytes_array_len",
+    )
+
+    json: list[Any] | None
+    raw_bytes: bytes | None
+    adjusted_json_array_len: int | None
+    adjusted_bytes_array_len: int | None
+
+    @staticmethod
+    def from_json(
+        json: list[Any], adjusted_json_array_len: int
+    ) -> "_UnrecognizedFields":
+        return _UnrecognizedFields(
+            json=json,
+            raw_bytes=None,
+            adjusted_json_array_len=adjusted_json_array_len,
+            adjusted_bytes_array_len=None,
+        )
+
+    @staticmethod
+    def from_bytes(
+        raw_bytes: bytes, adjusted_bytes_array_len: int
+    ) -> "_UnrecognizedFields":
+        return _UnrecognizedFields(
+            json=None,
+            raw_bytes=raw_bytes,
+            adjusted_json_array_len=None,
+            adjusted_bytes_array_len=adjusted_bytes_array_len,
+        )
