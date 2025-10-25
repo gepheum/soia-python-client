@@ -1,2 +1,3 @@
 - Add keep_unrecognized options
+- I can actually remove the finalize() method, and instead, have the Expr return a forwarding expression if they are called after the first time it's called and before it's returned
 - Remove this TODO file

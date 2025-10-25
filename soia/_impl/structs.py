@@ -89,6 +89,7 @@ class StructAdapter(Generic[T], TypeAdapter[T]):
         def forward_encode(value: Any, buffer: bytearray) -> None:
             frozen_class._encode(value, buffer)
 
+        # Will be overridden at finalization time.
         frozen_class._encode = forward_encode
 
         def forward_decode(stream: ByteStream) -> None:
@@ -772,7 +773,7 @@ def _make_encode_fn(
             zeros = "\\0" * (missing_slots)
             builder.append_ln(f"buffer.extend(b'{zeros}')")
         builder.append_ln(
-            Expr.local(f"encode_{field.field.name}", field.type.encode_fn()),
+            Expr.local("encode?", field.type.encode_fn()),
             f"self.{field.field.attribute}",
         )
         last_number = number
@@ -903,7 +904,7 @@ def _make_decode_fn(
             f"ret.{field.field.attribute} = ",
             field.type.default_expr(),
             f" if array_len <= {number} else ",
-            Expr.local(f"decode_{field.field.name}", field.type.decode_fn()),
+            Expr.local("decode?", field.type.decode_fn()),
             "(stream)",
         )
         last_number = number

@@ -4,10 +4,10 @@ from dataclasses import FrozenInstanceError, dataclass
 from typing import Any, Final, Generic, Union
 
 from soia import _spec, reflection
-from soia._impl.binary import encode_int64
+from soia._impl.binary import decode_int64, decode_unused, encode_int64
 from soia._impl.function_maker import BodyBuilder, Expr, ExprLike, Line, make_function
 from soia._impl.repr import repr_impl
-from soia._impl.type_adapter import T, TypeAdapter
+from soia._impl.type_adapter import T, ByteStream, TypeAdapter
 
 
 class EnumAdapter(Generic[T], TypeAdapter[T]):
@@ -30,6 +30,12 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
         self.finalization_state = 0
         self.spec = spec
         base_class = self.gen_class = _make_base_class(spec)
+
+        def forward_decode(stream: ByteStream) -> T:
+            return base_class._decode(stream)
+
+        # Will be overridden at finalization time.
+        base_class._decode = forward_decode
 
         private_is_enum_attr = _name_private_is_enum_attr(spec.id)
         self.private_is_enum_attr = private_is_enum_attr
@@ -81,11 +87,21 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
                 create_fn = _make_create_fn(wrap_fn, frozen_class)
                 setattr(base_class, f"create_{value_field.spec.name}", create_fn)
 
+        unrecognized_class = _make_unrecognized_class(base_class)
+
         base_class._fj = _make_from_json_fn(
             self.all_constant_fields,
             value_fields,
             set(self.spec.removed_numbers),
-            base_class,
+            base_class=base_class,
+            unrecognized_class=unrecognized_class,
+        )
+        base_class._decode = _make_decode_fn(
+            self.all_constant_fields,
+            value_fields,
+            set(self.spec.removed_numbers),
+            base_class=base_class,
+            unrecognized_class=unrecognized_class,
         )
 
         # Mark finalization as done.
@@ -128,8 +144,11 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
                 Expr.local("_cls?", self.gen_class), f".{fn_name}(", json_expr, ")"
             )
 
-    def encode_fn(self) -> Callable[[Any, bytearray], None]:
+    def encode_fn(self) -> Callable[[T, bytearray], None]:
         return _encode_impl
+
+    def decode_fn(self) -> Callable[[ByteStream], T]:
+        return self.gen_class._decode
 
     def get_type(self) -> reflection.Type:
         return reflection.RecordType(
@@ -409,11 +428,11 @@ def _make_from_json_fn(
     value_fields: Sequence[_ValueField],
     removed_numbers: set[int],
     base_class: type,
+    unrecognized_class: type,
 ) -> Callable[[Any], Any]:
-    unrecognized_class = _make_unrecognized_class(base_class)
     unrecognized_class_local = Expr.local("Unrecognized", unrecognized_class)
     obj_setattr_local = Expr.local("obj_settatr", object.__setattr__)
-    removed_numbers_local = Expr.local("removed_numbers", removed_numbers)
+    removed_numbers_tuple = tuple(sorted(removed_numbers))
 
     key_to_constant: dict[Union[int, str], Any] = {}
     for field in constant_fields:
@@ -424,15 +443,13 @@ def _make_from_json_fn(
     unknown_constant = key_to_constant[0]
     unknown_constant_local = Expr.local("unknown_constant", unknown_constant)
 
-    numbers: list[int] = []
-    names: list[str] = []
-    key_to_field: dict[Union[int, str], _ValueField] = {}
+    number_to_value_field: dict[int, _ValueField] = {}
+    name_to_value_field: dict[str, _ValueField] = {}
     for field in value_fields:
-        numbers.append(field.spec.number)
-        names.append(field.spec.name)
-        key_to_field[field.spec.number] = field
-        key_to_field[field.spec.name] = field
-    value_keys_local = Expr.local("value_keys", set(key_to_field.keys()))
+        number_to_value_field[field.spec.number] = field
+        name_to_value_field[field.spec.name] = field
+    value_field_numbers = tuple(sorted(number_to_value_field.keys()))
+    value_field_names = tuple(sorted(name_to_value_field.keys()))
 
     builder = BodyBuilder()
     # The reason why we wrap the function inside a 'while' is explained below.
@@ -449,14 +466,14 @@ def _make_from_json_fn(
         builder.append_ln("      return ", key_to_constant_local, "[json]")
         builder.append_ln("    except:")
         if removed_numbers:
-            builder.append_ln("      if json in ", removed_numbers_local, ":")
+            builder.append_ln(f"      if json in {removed_numbers_tuple}:")
             builder.append_ln("        return ", unknown_constant_local)
         builder.append_ln("      return ", unrecognized_class_local, "(json, b'\\0')")
 
-    def append_number_branches(numbers: list[int], indent: str) -> None:
+    def append_number_branches(numbers: Sequence[int], indent: str) -> None:
         if len(numbers) == 1:
             number = numbers[0]
-            field = key_to_field[number]
+            field = number_to_value_field[number]
             value_class_local = Expr.local("cls?", field.value_class)
             value_expr = field.field_type.from_json_expr("json[1]")
             builder.append_ln(f"{indent}ret = ", value_class_local, "()")
@@ -480,19 +497,16 @@ def _make_from_json_fn(
     if not value_fields:
         # The field was either removed or is an unrecognized field.
         if removed_numbers:
-            builder.append_ln("    if number in ", removed_numbers_local, ":")
+            builder.append_ln(f"    if number in {removed_numbers_tuple}:")
             builder.append_ln("      return ", unknown_constant_local)
         builder.append_ln("    return ", unrecognized_class_local, "(json, b'\\0')")
     else:
-        if len(value_fields) == 1:
-            builder.append_ln(f"    if number != {value_fields[0].spec.number}:")
-        else:
-            builder.append_ln("    if number not in ", value_keys_local, ":")
+        builder.append_ln(f"    if number not in {value_field_numbers}:")
         if removed_numbers:
-            builder.append_ln("      if number in ", removed_numbers_local, ":")
+            builder.append_ln(f"      if number in {removed_numbers_tuple}:")
             builder.append_ln("        return ", unknown_constant_local)
         builder.append_ln("      return ", unrecognized_class_local, "(json, b'\\0')")
-        append_number_branches(sorted(numbers), "    ")
+        append_number_branches(value_field_numbers, "    ")
 
     # READABLE FORMAT
     if len(constant_fields) == 1:
@@ -506,10 +520,10 @@ def _make_from_json_fn(
         # In readable mode, drop unrecognized values and use UNKNOWN instead.
         builder.append_ln("      return ", unknown_constant_local)
 
-    def append_name_branches(names: list[str], indent: str) -> None:
+    def append_name_branches(names: Sequence[str], indent: str) -> None:
         if len(names) == 1:
             name = names[0]
-            field = key_to_field[name]
+            field = name_to_value_field[name]
             value_class_local = Expr.local("cls?", field.value_class)
             value_expr = field.field_type.from_json_expr("json['value']")
             builder.append_ln(f"{indent}ret = ", value_class_local, "()")
@@ -532,10 +546,10 @@ def _make_from_json_fn(
         builder.append_ln("    return ", unknown_constant_local)
     else:
         builder.append_ln("    kind = json['kind']")
-        builder.append_ln("    if kind not in ", value_keys_local, ":")
+        builder.append_ln(f"    if kind not in {value_field_names}:")
         builder.append_ln("      return ", unknown_constant_local)
         builder.append_ln("    else:")
-        append_name_branches(sorted(names), "      ")
+        append_name_branches(value_field_names, "      ")
 
     # In the unlikely event that json.loads() returns an instance of a subclass of int.
     builder.append_ln("  elif isinstance(json, int):")
@@ -548,6 +562,104 @@ def _make_from_json_fn(
     return make_function(
         name="from_json",
         params=["json"],
+        body=builder.build(),
+    )
+
+
+def _make_decode_fn(
+    constant_fields: Sequence[_spec.ConstantField],
+    value_fields: Sequence[_ValueField],
+    removed_numbers: set[int],
+    base_class: type,
+    unrecognized_class: type,
+) -> Callable[[ByteStream], Any]:
+    unrecognized_class_local = Expr.local("Unrecognized", unrecognized_class)
+    obj_setattr_local = Expr.local("obj_settatr", object.__setattr__)
+
+    number_to_constant: dict[Union[int, str], Any] = {}
+    for field in constant_fields:
+        constant = getattr(base_class, field.attribute)
+        number_to_constant[field.number] = constant
+        number_to_constant[field.name] = constant
+    number_to_constant_local = Expr.local("number_to_constant", number_to_constant)
+    removed_numbers_tuple = tuple(sorted(removed_numbers))
+    unknown_constant = number_to_constant[0]
+    unknown_constant_local = Expr.local("unknown_constant", unknown_constant)
+
+    number_to_value_field: dict[int, _ValueField] = {}
+    for field in value_fields:
+        number_to_value_field[field.spec.number] = field
+    value_field_numbers = tuple(sorted(number_to_value_field.keys()))
+
+    builder = BodyBuilder()
+    builder.append_ln("start_offset = stream.position")
+    builder.append_ln("wire = stream.bytes[start_offset]")
+    builder.append_ln("if wire <= 238:")
+    # A number
+    builder.append_ln("  if wire < 232:")
+    builder.append_ln("    stream.position += 1")
+    builder.append_ln("    number = wire")
+    builder.append_ln("  else:")
+    builder.append_ln(
+        "    number = ", Expr.local("decode_int64", decode_int64), "(stream)"
+    )
+    builder.append_ln("    try:")
+    builder.append_ln("      return ", number_to_constant_local, "[number]")
+    builder.append_ln("    except:")
+    builder.append_ln("      ", Expr.local("decode_unused", decode_unused), "(stream)")
+    if removed_numbers:
+        builder.append_ln(f"      if json in {removed_numbers_tuple}:")
+        builder.append_ln("        return ", unknown_constant_local)
+    builder.append_ln("      bytes = stream.bytes[start_offset:stream.position]")
+    builder.append_ln("      return ", unrecognized_class_local, "(0, bytes)")
+    # An array of 2
+    builder.append_ln("stream.position += 1")
+    builder.append_ln("if wire == 248:")
+    builder.append_ln(
+        "  number = ", Expr.local("decode_int64", decode_int64), "(stream)"
+    )
+    builder.append_ln("else:")
+    builder.append_ln("  number = wire - 250")
+
+    def append_number_branches(numbers: Sequence[int], indent: str) -> None:
+        if len(numbers) == 1:
+            number = numbers[0]
+            field = number_to_value_field[number]
+            value_class_local = Expr.local("cls?", field.value_class)
+            decode_local = Expr.local("decode?", field.field_type.decode_fn())
+            value_expr = Expr.join(decode_local, "(stream)")
+            builder.append_ln(f"{indent}ret = ", value_class_local, "()")
+            builder.append_ln(
+                indent, obj_setattr_local, '(ret, "value", ', value_expr, ")"
+            )
+            builder.append_ln(f"{indent}return ret")
+        else:
+            indented = f"  {indent}"
+            mid_index = int(len(numbers) / 2)
+            mid_number = numbers[mid_index - 1]
+            operator = "==" if mid_index == 1 else "<="
+            builder.append_ln(f"{indent}if number {operator} {mid_number}:")
+            append_number_branches(numbers[0:mid_index], indented)
+            builder.append_ln(f"{indent}else:")
+            append_number_branches(numbers[mid_index:], indented)
+
+    if not value_fields:
+        # The field was either removed or is an unrecognized field.
+        if removed_numbers:
+            builder.append_ln(f"if number in {removed_numbers_tuple}:")
+            builder.append_ln("  return ", unknown_constant_local)
+        builder.append_ln("return ", unrecognized_class_local, "(json, b'\\0')")
+    else:
+        builder.append_ln(f"if number not in {value_field_numbers}:")
+        if removed_numbers:
+            builder.append_ln(f"  if number in {removed_numbers_tuple}:")
+            builder.append_ln("    return ", unknown_constant_local)
+        builder.append_ln("  return ", unrecognized_class_local, "(json, b'\\0')")
+        append_number_branches(value_field_numbers, "")
+
+    return make_function(
+        name="decode",
+        params=["stream"],
         body=builder.build(),
     )
 
