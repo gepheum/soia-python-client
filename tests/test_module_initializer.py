@@ -1461,3 +1461,323 @@ class ModuleInitializerTestCase(unittest.TestCase):
             TypeDescriptor.from_json(type_descriptor.as_json()),
             type_descriptor,
         )
+
+    def test_struct_binary_format_empty_struct(self):
+        """Test binary encoding for empty struct (0 fields with non-default values)."""
+        module = self.init_test_module()
+        Point = module["Point"]
+
+        # Empty struct should encode to wire 246 (0 fields)
+        empty_point = Point.partial()
+        empty_bytes = Point.SERIALIZER.to_bytes(empty_point)
+        self.assertEqual(empty_bytes.hex(), "736f6961f6")  # soia + 246
+
+        # Test roundtrip
+        restored = Point.SERIALIZER.from_bytes(empty_bytes)
+        self.assertEqual(restored, empty_point)
+        self.assertIs(restored, Point.DEFAULT)
+
+    def test_struct_binary_format_small_structs(self):
+        """Test binary encoding for structs with 1-3 non-default fields."""
+        module = self.init_test_module()
+        Point = module["Point"]
+
+        # One field (wire 247)
+        one_field = Point.partial(x=1.0)
+        one_bytes = Point.SERIALIZER.to_bytes(one_field)
+        self.assertTrue(one_bytes.hex().startswith("736f6961f7"))  # soia + 247
+        restored_one = Point.SERIALIZER.from_bytes(one_bytes)
+        self.assertEqual(restored_one.x, 1.0)
+        self.assertEqual(restored_one.y, 0.0)
+
+        # Two fields (wire 248)
+        two_fields = Point(x=1.0, y=2.0)
+        two_bytes = Point.SERIALIZER.to_bytes(two_fields)
+        self.assertEqual(two_fields._array_len, 3)
+        self.assertTrue(
+            two_bytes, b"soia\xf9\xf0\x00\x00\x80?\x00\xf0\x00\x00\x00@"
+        )  # soia + 249
+        restored_two = Point.SERIALIZER.from_bytes(two_bytes)
+        self.assertEqual(restored_two._array_len, 3)
+        self.assertEqual(restored_two.x, 1.0)
+        self.assertEqual(restored_two.y, 2.0)
+
+    def test_struct_binary_format_large_structs(self):
+        """Test binary encoding for structs with more than 3 non-default fields."""
+        module = self.init_test_module()
+        Primitives = module["Primitives"]
+
+        # Struct with many fields should use wire 250 + length prefix
+        full_struct = Primitives(
+            bool=True,
+            bytes=b"test",
+            f32=4.5,
+            f64=2.71828,
+            i32=42,
+            i64=123456789,
+            u64=987654321,
+            s="hello",
+            t=Timestamp.from_unix_millis(1000),
+        )
+        full_bytes = Primitives.SERIALIZER.to_bytes(full_struct)
+        self.assertTrue(full_bytes.hex().startswith("736f6961fa"))  # soia + 250
+
+        # Test roundtrip
+        restored = Primitives.SERIALIZER.from_bytes(full_bytes)
+        self.assertEqual(restored.bool, True)
+        self.assertEqual(restored.bytes, b"test")
+        self.assertAlmostEqual(restored.f32, 4.5, places=5)
+        self.assertAlmostEqual(restored.f64, 2.71828, places=10)
+        self.assertEqual(restored.i32, 42)
+        self.assertEqual(restored.i64, 123456789)
+        self.assertEqual(restored.u64, 987654321)
+        self.assertEqual(restored.s, "hello")
+        self.assertEqual(restored.t, Timestamp.from_unix_millis(1000))
+        self.assertEqual(restored, full_struct)
+
+    def test_struct_binary_with_optional_fields(self):
+        """Test binary serialization of structs with optional fields."""
+        module = self.init_test_module()
+        Segment = module["Segment"]
+        Point = module["Point"]
+
+        # Test with optional field set to None
+        seg_with_none = Segment(a=Point(x=1.0, y=2.0), b=Point(x=3.0, y=4.0), c=None)
+        bytes_none = Segment.SERIALIZER.to_bytes(seg_with_none)
+        restored_none = Segment.SERIALIZER.from_bytes(bytes_none)
+        self.assertEqual(restored_none.a.x, 1.0)
+        self.assertEqual(restored_none.a.y, 2.0)
+        self.assertEqual(restored_none.b.x, 3.0)
+        self.assertEqual(restored_none.b.y, 4.0)
+        self.assertIsNone(restored_none.c)
+        self.assertEqual(restored_none, seg_with_none)
+
+        # Test with optional field set to a value
+        seg_with_value = Segment(
+            a=Point(x=1.0, y=2.0), b=Point(x=3.0, y=4.0), c=Point(x=5.0, y=6.0)
+        )
+        bytes_value = Segment.SERIALIZER.to_bytes(seg_with_value)
+        restored_value = Segment.SERIALIZER.from_bytes(bytes_value)
+        self.assertEqual(restored_value.a.x, 1.0)
+        self.assertEqual(restored_value.a.y, 2.0)
+        self.assertEqual(restored_value.b.x, 3.0)
+        self.assertEqual(restored_value.b.y, 4.0)
+        self.assertIsNotNone(restored_value.c)
+        self.assertEqual(restored_value.c.x, 5.0)
+        self.assertEqual(restored_value.c.y, 6.0)
+        self.assertEqual(restored_value, seg_with_value)
+
+    def test_struct_binary_with_nested_structs(self):
+        """Test binary serialization of nested struct fields."""
+        module = self.init_test_module()
+        Segment = module["Segment"]
+        Point = module["Point"]
+
+        segment = Segment(
+            a=Point(x=10.0, y=20.0), b=Point(x=30.0, y=40.0), c=Point(x=50.0, y=60.0)
+        )
+
+        # Binary roundtrip
+        binary_bytes = Segment.SERIALIZER.to_bytes(segment)
+        restored = Segment.SERIALIZER.from_bytes(binary_bytes)
+
+        self.assertEqual(restored.a.x, 10.0)
+        self.assertEqual(restored.a.y, 20.0)
+        self.assertEqual(restored.b.x, 30.0)
+        self.assertEqual(restored.b.y, 40.0)
+        self.assertIsNotNone(restored.c)
+        self.assertEqual(restored.c.x, 50.0)
+        self.assertEqual(restored.c.y, 60.0)
+        self.assertEqual(restored, segment)
+
+    def test_struct_binary_with_array_fields(self):
+        """Test binary serialization of structs with array fields."""
+        module = self.init_test_module()
+        Shape = module["Shape"]
+        Point = module["Point"]
+
+        # Test with empty array
+        empty_shape = Shape(points=())
+        empty_bytes = Shape.SERIALIZER.to_bytes(empty_shape)
+        restored_empty = Shape.SERIALIZER.from_bytes(empty_bytes)
+        self.assertEqual(len(restored_empty.points), 0)
+
+        # Test with small array (1-3 elements)
+        small_shape = Shape(points=(Point(x=1.0, y=2.0), Point(x=3.0, y=4.0)))
+        small_bytes = Shape.SERIALIZER.to_bytes(small_shape)
+        restored_small = Shape.SERIALIZER.from_bytes(small_bytes)
+        self.assertEqual(len(restored_small.points), 2)
+        self.assertEqual(restored_small.points[0].x, 1.0)
+        self.assertEqual(restored_small.points[0].y, 2.0)
+        self.assertEqual(restored_small.points[1].x, 3.0)
+        self.assertEqual(restored_small.points[1].y, 4.0)
+
+        # Test with larger array
+        large_shape = Shape(
+            points=(
+                Point(x=1.0, y=2.0),
+                Point(x=3.0, y=4.0),
+                Point(x=5.0, y=6.0),
+                Point(x=7.0, y=8.0),
+                Point(x=9.0, y=10.0),
+            )
+        )
+        large_bytes = Shape.SERIALIZER.to_bytes(large_shape)
+        restored_large = Shape.SERIALIZER.from_bytes(large_bytes)
+        self.assertEqual(len(restored_large.points), 5)
+        for i, point in enumerate(restored_large.points):
+            self.assertEqual(point.x, float(i * 2 + 1))
+            self.assertEqual(point.y, float(i * 2 + 2))
+
+    def test_struct_binary_default_values(self):
+        """Test that default values are handled correctly in binary serialization."""
+        module = self.init_test_module()
+        Primitives = module["Primitives"]
+
+        # All defaults
+        default_struct = Primitives.DEFAULT
+        default_bytes = Primitives.SERIALIZER.to_bytes(default_struct)
+
+        # Should encode as empty struct (wire 246)
+        self.assertTrue(default_bytes.hex().startswith("736f6961f6"))
+
+        restored = Primitives.SERIALIZER.from_bytes(default_bytes)
+        self.assertEqual(restored.bool, False)
+        self.assertEqual(restored.bytes, b"")
+        self.assertEqual(restored.f32, 0.0)
+        self.assertEqual(restored.f64, 0.0)
+        self.assertEqual(restored.i32, 0)
+        self.assertEqual(restored.i64, 0)
+        self.assertEqual(restored.u64, 0)
+        self.assertEqual(restored.s, "")
+        self.assertEqual(restored.t, Timestamp.from_unix_millis(0))
+        self.assertEqual(restored, default_struct)
+
+    def test_struct_binary_partial_defaults(self):
+        """Test structs with some default and some non-default values."""
+        module = self.init_test_module()
+        Primitives = module["Primitives"]
+
+        # Only set some fields
+        partial_struct = Primitives(
+            bool=False,  # default
+            bytes=b"",  # default
+            f32=0.0,  # default
+            f64=0.0,  # default
+            i32=42,  # non-default
+            i64=0,  # default
+            u64=0,  # default
+            s="test",  # non-default
+            t=Timestamp.from_unix_millis(0),  # default
+        )
+
+        partial_bytes = Primitives.SERIALIZER.to_bytes(partial_struct)
+        restored = Primitives.SERIALIZER.from_bytes(partial_bytes)
+
+        self.assertEqual(restored.bool, False)
+        self.assertEqual(restored.bytes, b"")
+        self.assertEqual(restored.f32, 0.0)
+        self.assertEqual(restored.f64, 0.0)
+        self.assertEqual(restored.i32, 42)
+        self.assertEqual(restored.i64, 0)
+        self.assertEqual(restored.u64, 0)
+        self.assertEqual(restored.s, "test")
+        self.assertEqual(restored.t, Timestamp.from_unix_millis(0))
+        self.assertEqual(restored, partial_struct)
+
+    def test_struct_binary_edge_case_values(self):
+        """Test binary serialization with edge case values."""
+        module = self.init_test_module()
+        Primitives = module["Primitives"]
+
+        # Test with edge case values
+        edge_struct = Primitives(
+            bool=True,
+            bytes=b"\x00\xff",  # null byte and max byte
+            f32=float("inf"),
+            f64=float("-inf"),
+            i32=2147483647,  # max int32
+            i64=-9223372036854775808,  # min int64
+            u64=18446744073709551615,  # max uint64
+            s="\u0000\uffff",  # null char and max unicode
+            t=Timestamp.from_unix_millis(-8640000000000000),  # min timestamp
+        )
+
+        edge_bytes = Primitives.SERIALIZER.to_bytes(edge_struct)
+        restored = Primitives.SERIALIZER.from_bytes(edge_bytes)
+
+        self.assertEqual(restored.bool, True)
+        self.assertEqual(restored.bytes, b"\x00\xff")
+        self.assertEqual(restored.f32, float("inf"))
+        self.assertEqual(restored.f64, float("-inf"))
+        self.assertEqual(restored.i32, 2147483647)
+        self.assertEqual(restored.i64, -9223372036854775808)
+        self.assertEqual(restored.u64, 18446744073709551615)
+        self.assertEqual(restored.s, "\u0000\uffff")
+        self.assertEqual(restored.t, Timestamp.from_unix_millis(-8640000000000000))
+        self.assertEqual(restored, edge_struct)
+
+    def test_struct_binary_complex_nested_structure(self):
+        """Test binary serialization of complex nested structures."""
+        module = self.init_test_module()
+        Shape = module["Shape"]
+        Point = module["Point"]
+
+        # Create a complex shape with multiple points
+        complex_shape = Shape(
+            points=(
+                Point(x=0.0, y=0.0),
+                Point(x=100.0, y=0.0),
+                Point(x=100.0, y=100.0),
+                Point(x=0.0, y=100.0),
+            )
+        )
+
+        # Binary roundtrip
+        binary_bytes = Shape.SERIALIZER.to_bytes(complex_shape)
+        restored = Shape.SERIALIZER.from_bytes(binary_bytes)
+
+        self.assertEqual(restored, complex_shape)
+        expected_coords = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]
+        for i, (expected_x, expected_y) in enumerate(expected_coords):
+            self.assertEqual(restored.points[i].x, expected_x)
+            self.assertEqual(restored.points[i].y, expected_y)
+
+    def test_struct_binary_multiple_roundtrips(self):
+        """Test that multiple binary serialization roundtrips preserve data."""
+        module = self.init_test_module()
+        Point = module["Point"]
+
+        original = Point(x=3.14159, y=2.71828)
+        current = original
+
+        # Do multiple roundtrips
+        for _ in range(5):
+            binary_bytes = Point.SERIALIZER.to_bytes(current)
+            current = Point.SERIALIZER.from_bytes(binary_bytes)
+
+        # Should still be equal (within floating point precision)
+        self.assertAlmostEqual(current.x, original.x, places=5)
+        self.assertAlmostEqual(current.y, original.y, places=5)
+
+    def test_struct_binary_empty_vs_default(self):
+        """Test that empty struct and struct with defaults produce same binary output."""
+        module = self.init_test_module()
+        Point = module["Point"]
+
+        empty = Point.DEFAULT
+        with_defaults = Point(x=0.0, y=0.0)
+
+        empty_bytes = Point.SERIALIZER.to_bytes(empty)
+        defaults_bytes = Point.SERIALIZER.to_bytes(with_defaults)
+
+        # Both should produce identical binary output
+        self.assertEqual(empty_bytes, defaults_bytes)
+
+        # Both should roundtrip to equivalent objects
+        restored_empty = Point.SERIALIZER.from_bytes(empty_bytes)
+        restored_defaults = Point.SERIALIZER.from_bytes(defaults_bytes)
+
+        self.assertEqual(restored_empty, restored_defaults)
+        self.assertEqual(restored_empty.x, 0.0)
+        self.assertEqual(restored_empty.y, 0.0)

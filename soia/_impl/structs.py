@@ -19,7 +19,7 @@ from soia._impl.function_maker import (
 from soia._impl.keep import KEEP
 from soia._impl.repr import repr_impl
 from soia._impl.type_adapter import T, ByteStream, TypeAdapter
-from soia._impl.binary import decode_unused, encode_length_prefix
+from soia._impl.binary import decode_int64, decode_unused, encode_length_prefix
 
 
 class StructAdapter(Generic[T], TypeAdapter[T]):
@@ -756,11 +756,17 @@ def _make_encode_fn(
 ) -> Callable[[Any, bytearray], None]:
     builder = BodyBuilder()
     builder.append_ln(
-        "l = self._unrecognized.adjusted_bytes_array_len if ",
-        "self._unrecognized else self._array_len",
+        "l = value._unrecognized.adjusted_bytes_array_len if ",
+        "value._unrecognized else value._array_len",
     )
+    builder.append_ln("if l < 4:")
+    builder.append_ln("  buffer.append(246 + l)")
+    builder.append_ln("else:")
+    builder.append_ln("  buffer.append(250)")
     builder.append_ln(
-        Expr.local("_encode_length_prefix", encode_length_prefix), "(l, buffer)"
+        "  ",
+        Expr.local("_encode_length_prefix", encode_length_prefix),
+        "(l, buffer)",
     )
     last_number = -1
     for field in fields:
@@ -774,7 +780,7 @@ def _make_encode_fn(
             builder.append_ln(f"buffer.extend(b'{zeros}')")
         builder.append_ln(
             Expr.local("encode?", field.type.encode_fn()),
-            f"self.{field.field.attribute}",
+            f"(value.{field.field.attribute}, buffer)",
         )
         last_number = number
     builder.append_ln(f"if l <= {num_slots_incl_removed}:")
@@ -784,10 +790,10 @@ def _make_encode_fn(
         missing_slots = num_slots_incl_removed - num_slots_excl_removed
         zeros = "\\0" * (missing_slots)
         builder.append_ln(f"buffer.extend(b'{zeros}')")
-    builder.append_ln("buffer.extend(self._unrecognized.raw_bytes)")
+    builder.append_ln("buffer.extend(value._unrecognized.raw_bytes)")
     return make_function(
         name="encode",
-        params=["self"],
+        params=["value, buffer"],
         body=builder.build(),
     )
 
@@ -886,7 +892,11 @@ def _make_decode_fn(
     builder.append_ln("if wire in (0, 246):")
     builder.append_ln("  return ", Expr.local("DEFAULT", frozen_class.DEFAULT))
     builder.append_ln("elif wire == 250:")
-    builder.append_ln("  array_len = decode_int64(stream)")
+    builder.append_ln(
+        "  array_len = ",
+        Expr.local("decode_int64", decode_int64),
+        "(stream)",
+    )
     builder.append_ln("else:")
     builder.append_ln("  array_len = wire - 246")
     # Create an instance of the simple class. We'll later change its __class__ attr.
@@ -898,8 +908,13 @@ def _make_decode_fn(
     last_number = -1
     for field in fields:
         number = field.field.number
-        for _ in range(number - last_number - 2):
-            builder.append_ln(Expr.local("decode_unused", decode_unused), "(stream)")
+        for removed_number in range(last_number + 1, number):
+            builder.append_ln(f"if {removed_number} < array_len:")
+            builder.append_ln(
+                "  ",
+                Expr.local("decode_unused", decode_unused),
+                "(stream)",
+            )
         builder.append_ln(
             f"ret.{field.field.attribute} = ",
             field.type.default_expr(),
@@ -911,9 +926,7 @@ def _make_decode_fn(
     num_slots_excl_removed = last_number + 1
 
     builder.append_ln(f"if array_len > {num_slots_excl_removed}:")
-    builder.append_ln(
-        "  if array_len > {num_slots_incl_removed}:"
-    )  # TODO: and parse unrecognized...
+    builder.append_ln("  if array_len > {num_slots_incl_removed}:")
     for _ in range(num_slots_incl_removed - num_slots_excl_removed):
         builder.append_ln(Expr.local("    decode_unused", decode_unused), "(stream)")
     builder.append_ln("    start_offset = stream.position")

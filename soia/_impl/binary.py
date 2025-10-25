@@ -232,7 +232,7 @@ def make_decode_number_fn(
     )
 
 
-decode_bool: Final[Callable[[ByteStream], bool]] = make_decode_number_fn("float")
+decode_bool: Final[Callable[[ByteStream], bool]] = make_decode_number_fn("bool")
 decode_int32: Final[Callable[[ByteStream], int]] = make_decode_number_fn("int32")
 decode_int64: Final[Callable[[ByteStream], int]] = make_decode_number_fn("int64")
 decode_uint64: Final[Callable[[ByteStream], int]] = make_decode_number_fn("uint64")
