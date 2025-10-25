@@ -8,7 +8,7 @@ from weakref import WeakValueDictionary
 from soia import reflection
 from soia._impl.function_maker import Expr, LineSpan, make_function
 from soia._impl.never import Never
-from soia._impl.type_adapter import TypeAdapter
+from soia._impl.type_adapter import ByteStream, TypeAdapter
 
 T = TypeVar("T")
 
@@ -21,6 +21,8 @@ class Serializer(Generic[T]):
         "_to_dense_json_fn",
         "_to_readable_json_fn",
         "_from_json_fn",
+        "_encode_fn",
+        "_decode_fn",
         "__dict__",
     )
 
@@ -28,19 +30,24 @@ class Serializer(Generic[T]):
     _to_dense_json_fn: Callable[[T], Any]
     _to_readable_json_fn: Callable[[T], Any]
     _from_json_fn: Callable[[Any], T]
+    _encode_fn: Callable[[T, bytearray], None]
+    _decode_fn: Callable[[ByteStream], T]
 
     def __init__(self, adapter: Never):
         # Use Never (^) as a trick to make the constructor internal.
-        object.__setattr__(self, "_adapter", adapter)
+        as_adapter = cast(TypeAdapter[T], adapter)
+        object.__setattr__(self, "_adapter", as_adapter)
         object.__setattr__(
-            self, "_to_dense_json_fn", _make_to_json_fn(adapter, readable=False)
+            self, "_to_dense_json_fn", _make_to_json_fn(as_adapter, readable=False)
         )
         object.__setattr__(
             self,
             "_to_readable_json_fn",
-            _make_to_json_fn(adapter, readable=True),
+            _make_to_json_fn(as_adapter, readable=True),
         )
-        object.__setattr__(self, "_from_json_fn", _make_from_json_fn(adapter))
+        object.__setattr__(self, "_from_json_fn", _make_from_json_fn(as_adapter))
+        object.__setattr__(self, "_encode_fn", as_adapter.encode_fn())
+        object.__setattr__(self, "_decode_fn", as_adapter.decode_fn())
 
     def to_json(self, input: T, *, readable=False) -> Any:
         if readable:
@@ -59,6 +66,17 @@ class Serializer(Generic[T]):
 
     def from_json_code(self, json_code: str) -> T:
         return self._from_json_fn(jsonlib.loads(json_code))
+
+    def to_bytes(self, input: T) -> bytes:
+        buffer = bytearray(b"soia")
+        self._encode_fn(input, buffer)
+        return bytes(buffer)
+
+    def from_bytes(self, bytes: bytes) -> T:
+        if bytes.startswith(b"soia"):
+            stream = ByteStream(bytes, position=4)
+            return self._decode_fn(stream)
+        return self.from_json_code(bytes.decode("utf-8"))
 
     @cached_property
     def type_descriptor(self) -> reflection.TypeDescriptor:

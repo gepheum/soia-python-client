@@ -16,10 +16,6 @@ class ByteStream:
     buffer: bytes
     position: int
 
-    def __init__(self, buffer: bytes):
-        self.buffer = buffer
-        self.position = 0
-
     def read_wire(self) -> int:
         wire = self.buffer[self.position]
         self.position += 1
