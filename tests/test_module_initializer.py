@@ -530,14 +530,23 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIsInstance(point.x, float)
         self.assertEqual(point._array_len, 3)
 
-    def test_point_with_unrecognized_and_removed_fields(self):
+    def test_point_with_keep_unrecognized_fields(self):
         point_cls = self.init_test_module()["Point"]
         serializer = point_cls.SERIALIZER
-        point = serializer.from_json([1.5, 1, 2.5, True])
+        point = serializer.from_json([1.5, 1, 2.5, True], keep_unrecognized_fields=True)
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
         self.assertEqual(serializer.to_json(point), [1.5, 0, 2.5, True])
         point = point.to_mutable().to_frozen()
         self.assertEqual(serializer.to_json(point), [1.5, 0, 2.5, True])
+
+    def test_point_with_drop_unrecognized_fields(self):
+        point_cls = self.init_test_module()["Point"]
+        serializer = point_cls.SERIALIZER
+        point = serializer.from_json([1.5, 1, 2.5, True])
+        self.assertEqual(point, point_cls(x=1.5, y=2.5))
+        self.assertEqual(serializer.to_json(point), [1.5, 0, 2.5])
+        point = point.to_mutable().to_frozen()
+        self.assertEqual(serializer.to_json(point), [1.5, 0, 2.5])
 
     def test_struct_to_dense_json_with_removed_fields(self):
         test_module = self.init_test_module()
@@ -866,7 +875,29 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(json_object_entry_cls.DEFAULT.value, json_value_cls.UNKNOWN)
         self.assertEqual(json_object_entry_cls.partial().value, json_value_cls.UNKNOWN)
 
-    def test_enum_with_unrecognized_and_removed_fields(self):
+    def test_enum_with_keep_unrecognized_fields(self):
+        json_value_cls = self.init_test_module()["JsonValue"]
+        serializer = json_value_cls.SERIALIZER
+        json_value = serializer.from_json(100, keep_unrecognized_fields=True)  # removed
+        self.assertEqual(json_value, json_value_cls.UNKNOWN)
+        self.assertEqual(serializer.to_json(json_value), 0)
+        json_value = serializer.from_json(
+            [101, True], keep_unrecognized_fields=True
+        )  # removed
+        self.assertEqual(json_value, json_value_cls.UNKNOWN)
+        self.assertEqual(serializer.to_json(json_value), 0)
+        json_value = serializer.from_json(
+            102, keep_unrecognized_fields=True
+        )  # unrecognized
+        self.assertEqual(json_value, json_value_cls.UNKNOWN)
+        self.assertEqual(serializer.to_json(json_value), 102)
+        json_value = serializer.from_json(
+            [102, True], keep_unrecognized_fields=True
+        )  # unrecognized
+        self.assertEqual(json_value, json_value_cls.UNKNOWN)
+        self.assertEqual(serializer.to_json(json_value), [102, True])
+
+    def test_enum_with_drop_unrecognized_fields(self):
         json_value_cls = self.init_test_module()["JsonValue"]
         serializer = json_value_cls.SERIALIZER
         json_value = serializer.from_json(100)  # removed
@@ -877,10 +908,10 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(serializer.to_json(json_value), 0)
         json_value = serializer.from_json(102)  # unrecognized
         self.assertEqual(json_value, json_value_cls.UNKNOWN)
-        self.assertEqual(serializer.to_json(json_value), 102)
+        self.assertEqual(serializer.to_json(json_value), 0)
         json_value = serializer.from_json([102, True])  # unrecognized
         self.assertEqual(json_value, json_value_cls.UNKNOWN)
-        self.assertEqual(serializer.to_json(json_value), [102, True])
+        self.assertEqual(serializer.to_json(json_value), 0)
 
     def test_class_name(self):
         module = self.init_test_module()

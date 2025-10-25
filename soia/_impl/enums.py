@@ -481,7 +481,9 @@ def _make_from_json_fn(
         builder.append_ln("      return ", key_to_constant_local, "[json]")
         builder.append_ln("    except:")
         if removed_numbers:
-            builder.append_ln(f"      if json in {removed_numbers_tuple}:")
+            builder.append_ln(
+                f"      if json in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+            )
             builder.append_ln("        return ", unknown_constant_local)
         builder.append_ln("      return ", unrecognized_class_local, "(json, b'\\0')")
 
@@ -514,13 +516,17 @@ def _make_from_json_fn(
     if not value_fields:
         # The field was either removed or is an unrecognized field.
         if removed_numbers:
-            builder.append_ln(f"    if number in {removed_numbers_tuple}:")
+            builder.append_ln(
+                f"    if number in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+            )
             builder.append_ln("      return ", unknown_constant_local)
         builder.append_ln("    return ", unrecognized_class_local, "(json, b'\\0')")
     else:
         builder.append_ln(f"    if number not in {value_field_numbers}:")
         if removed_numbers:
-            builder.append_ln(f"      if number in {removed_numbers_tuple}:")
+            builder.append_ln(
+                f"      if number in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+            )
             builder.append_ln("        return ", unknown_constant_local)
         builder.append_ln("      return ", unrecognized_class_local, "(json, b'\\0')")
         append_number_branches(value_field_numbers, "    ")
@@ -626,7 +632,9 @@ def _make_decode_fn(
     builder.append_ln("  except:")
     builder.append_ln("    ", Expr.local("decode_unused", decode_unused), "(stream)")
     if removed_numbers:
-        builder.append_ln(f"    if number in {removed_numbers_tuple}:")
+        builder.append_ln(
+            f"    if number in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+        )
         builder.append_ln("      return ", unknown_constant_local)
     builder.append_ln("    bytes = stream.buffer[start_offset:stream.position]")
     builder.append_ln("    return ", unrecognized_class_local, "(0, bytes)")
@@ -664,14 +672,18 @@ def _make_decode_fn(
     if not value_fields:
         # The field was either removed or is an unrecognized field.
         if removed_numbers:
-            builder.append_ln(f"if number in {removed_numbers_tuple}:")
+            builder.append_ln(
+                f"if number in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+            )
             builder.append_ln("  return ", unknown_constant_local)
         builder.append_ln("bytes = stream.buffer[start_offset:stream.position]")
         builder.append_ln("return ", unrecognized_class_local, "(0, bytes)")
     else:
         builder.append_ln(f"if number not in {value_field_numbers}:")
         if removed_numbers:
-            builder.append_ln(f"  if number in {removed_numbers_tuple}:")
+            builder.append_ln(
+                f"  if number in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+            )
             builder.append_ln("    return ", unknown_constant_local)
         builder.append_ln("  bytes = stream.buffer[start_offset:stream.position]")
         builder.append_ln("  return ", unrecognized_class_local, "(0, bytes)")

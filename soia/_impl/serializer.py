@@ -74,9 +74,11 @@ class Serializer(Generic[T]):
         self._encode_fn(input, buffer)
         return bytes(buffer)
 
-    def from_bytes(self, bytes: bytes) -> T:
+    def from_bytes(self, bytes: bytes, keep_unrecognized_fields: bool = False) -> T:
         if bytes.startswith(b"soia"):
-            stream = ByteStream(bytes, position=4)
+            stream = ByteStream(
+                bytes, position=4, keep_unrecognized_fields=keep_unrecognized_fields
+            )
             return self._decode_fn(stream)
         return self.from_json_code(bytes.decode("utf-8"))
 

@@ -728,9 +728,8 @@ def _make_to_dense_json_fn(
                 readable=False,
             ),
         )
-    builder.append_ln(f"if l <= {num_slots_incl_removed}:")
-    builder.append_ln("  return ret")
-    builder.append_ln(f"ret[{num_slots_incl_removed}:] = self._unrecognized.json")
+    builder.append_ln(f"if {num_slots_incl_removed} < l:")
+    builder.append_ln(f"  ret[{num_slots_incl_removed}:] = self._unrecognized.json")
     builder.append_ln("return ret")
     return make_function(
         name="to_dense_json",
@@ -849,11 +848,17 @@ def _make_from_json_fn(
         num_slots_excl_removed = fields[-1].field.number + 1
     else:
         num_slots_excl_removed = 0
-    builder.append_ln(f"  if array_len <= {num_slots_incl_removed}:")
+    builder.append_ln(
+        f"  if array_len <= {num_slots_incl_removed} or not keep_unrecognized_fields:"
+    )
     builder.append_ln("    ret._unrecognized = None")
     builder.append_ln(
         "    ret._array_len = ",
-        _adjust_array_len_expr("array_len", removed_numbers),
+        _adjust_array_len_expr(
+            "array_len",
+            removed_numbers=removed_numbers,
+            num_slots_excl_removed=num_slots_excl_removed,
+        ),
     )
     builder.append_ln("  else:")
     builder.append_ln(
@@ -940,7 +945,9 @@ def _make_decode_fn(
     num_slots_excl_removed = last_number + 1
 
     builder.append_ln(f"if array_len > {num_slots_excl_removed}:")
-    builder.append_ln("  if array_len > {num_slots_incl_removed}:")
+    builder.append_ln(
+        f"  if array_len > {num_slots_incl_removed} and keep_unrecognized_fields:"
+    )
     for _ in range(num_slots_incl_removed - num_slots_excl_removed):
         builder.append_ln(Expr.local("    decode_unused", decode_unused), "(stream)")
     builder.append_ln("    start_offset = stream.position")
@@ -953,7 +960,7 @@ def _make_decode_fn(
         "(raw_bytes=stream.buffer[start_offset:end_offset], adjusted_bytes_array_len=array_len)",
     )
     builder.append_ln("  else:")
-    builder.append_ln(f"    for _ in range(array_len - {num_slots_incl_removed}):")
+    builder.append_ln(f"    for _ in range(array_len - {num_slots_excl_removed}):")
     builder.append_ln("      ", Expr.local("decode_unused", decode_unused), "(stream)")
     builder.append_ln("    ret._unrecognized = None")
     builder.append_ln("else:")
@@ -961,7 +968,11 @@ def _make_decode_fn(
 
     builder.append_ln(
         "  ret._array_len = ",
-        _adjust_array_len_expr("array_len", removed_numbers=removed_numbers),
+        _adjust_array_len_expr(
+            "array_len",
+            removed_numbers=removed_numbers,
+            num_slots_excl_removed=num_slots_excl_removed,
+        ),
     )
 
     builder.append_ln(
@@ -976,55 +987,27 @@ def _make_decode_fn(
     )
 
 
-def _adjust_array_len_expr(var: str, removed_numbers: tuple[int, ...]) -> str:
+def _adjust_array_len_expr(
+    var: str,
+    removed_numbers: tuple[int, ...],
+    num_slots_excl_removed: int,
+) -> str:
     """
     When parsing a dense JSON or decoding a binary string, we can reuse the array length
     in the decoded struct, but we need to account for possibly newly-removed fields. The
     last field of the adjusted array length cannot be a removed field.
-
-    Let's imagine that field number 3 was removed from a struct.
-    This function would return the following expression:
-        array_len if array_len <= 3 else 3 if array_len == 4 else array_len
     """
-
-    @dataclass
-    class _RemovedSpan:
-        """Sequence of consecutive removed fields."""
-
-        # Number of the first removed field.
-        begin: int = 0
-        # Number after the last removed field.
-        end: int = 0
-
-    def get_removed_spans() -> list[_RemovedSpan]:
-        ret: list[_RemovedSpan] = []
-        for number in sorted(removed_numbers):
-            last = ret[-1] if ret else None
-            if last and last.end == number:
-                last.end = number + 1
-            else:
-                ret.append(_RemovedSpan(number, number + 1))
-        return ret
-
-    removed_spans = get_removed_spans()
-
-    ret = ""
-    lower_bound = 0
-    for s in removed_spans:
-        if s.begin == lower_bound:
-            ret += f"{s.begin} if {var} <= {s.end} else "
-        elif s.end == s.begin + 1:
-            # Similar to the expression in 'else' but uses '==' instead of '<='
-            ret += (
-                f"{var} if {var} <= {s.begin} else {s.begin} if {var} == {s.end} else "
-            )
+    removed_numbers_set = set(removed_numbers)
+    table: list[int] = [0]
+    last_len = 0
+    for i in range(0, num_slots_excl_removed - 1):
+        if i in removed_numbers_set:
+            table.append(last_len)
         else:
-            ret += (
-                f"{var} if {var} <= {s.begin} else {s.begin} if {var} <= {s.end} else "
-            )
-        lower_bound = s.end + 1
-    ret += var
-    return ret
+            table.append(i + 1)
+            last_len = i + 1
+    table_tuple = tuple(table)
+    return f"{table_tuple}[{var}] if {var} < {num_slots_excl_removed} else {num_slots_excl_removed}"
 
 
 def _init_default(default: Any, fields: Sequence[_Field]) -> None:
