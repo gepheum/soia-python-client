@@ -304,6 +304,7 @@ def _make_value_class(
         _number: Final[int] = number
         # has value
         _hv: Final[bool] = True
+        _bytes: Final[None] = None
 
         def __init__(self):
             # Do not call super().__init__().
@@ -576,11 +577,10 @@ def _make_decode_fn(
     unrecognized_class_local = Expr.local("Unrecognized", unrecognized_class)
     obj_setattr_local = Expr.local("obj_settatr", object.__setattr__)
 
-    number_to_constant: dict[Union[int, str], Any] = {}
+    number_to_constant: dict[int, Any] = {}
     for field in constant_fields:
         constant = getattr(base_class, field.attribute)
         number_to_constant[field.number] = constant
-        number_to_constant[field.name] = constant
     number_to_constant_local = Expr.local("number_to_constant", number_to_constant)
     removed_numbers_tuple = tuple(sorted(removed_numbers))
     unknown_constant = number_to_constant[0]
@@ -603,15 +603,15 @@ def _make_decode_fn(
     builder.append_ln(
         "    number = ", Expr.local("decode_int64", decode_int64), "(stream)"
     )
-    builder.append_ln("    try:")
-    builder.append_ln("      return ", number_to_constant_local, "[number]")
-    builder.append_ln("    except:")
-    builder.append_ln("      ", Expr.local("decode_unused", decode_unused), "(stream)")
+    builder.append_ln("  try:")
+    builder.append_ln("    return ", number_to_constant_local, "[number]")
+    builder.append_ln("  except:")
+    builder.append_ln("    ", Expr.local("decode_unused", decode_unused), "(stream)")
     if removed_numbers:
-        builder.append_ln(f"      if json in {removed_numbers_tuple}:")
-        builder.append_ln("        return ", unknown_constant_local)
-    builder.append_ln("      bytes = stream.buffer[start_offset:stream.position]")
-    builder.append_ln("      return ", unrecognized_class_local, "(0, bytes)")
+        builder.append_ln(f"    if number in {removed_numbers_tuple}:")
+        builder.append_ln("      return ", unknown_constant_local)
+    builder.append_ln("    bytes = stream.buffer[start_offset:stream.position]")
+    builder.append_ln("    return ", unrecognized_class_local, "(0, bytes)")
     # An array of 2
     builder.append_ln("stream.position += 1")
     builder.append_ln("if wire == 248:")
@@ -648,13 +648,15 @@ def _make_decode_fn(
         if removed_numbers:
             builder.append_ln(f"if number in {removed_numbers_tuple}:")
             builder.append_ln("  return ", unknown_constant_local)
-        builder.append_ln("return ", unrecognized_class_local, "(json, b'\\0')")
+        builder.append_ln("bytes = stream.buffer[start_offset:stream.position]")
+        builder.append_ln("return ", unrecognized_class_local, "(0, bytes)")
     else:
         builder.append_ln(f"if number not in {value_field_numbers}:")
         if removed_numbers:
             builder.append_ln(f"  if number in {removed_numbers_tuple}:")
             builder.append_ln("    return ", unknown_constant_local)
-        builder.append_ln("  return ", unrecognized_class_local, "(json, b'\\0')")
+        builder.append_ln("  bytes = stream.buffer[start_offset:stream.position]")
+        builder.append_ln("  return ", unrecognized_class_local, "(0, bytes)")
         append_number_branches(value_field_numbers, "")
 
     return make_function(

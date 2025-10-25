@@ -1781,3 +1781,344 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(restored_empty, restored_defaults)
         self.assertEqual(restored_empty.x, 0.0)
         self.assertEqual(restored_empty.y, 0.0)
+
+    def test_enum_binary_format_constants(self):
+        """Test binary encoding for enum constant fields."""
+        module = self.init_test_module()
+        PrimaryColor = module["PrimaryColor"]
+
+        # Test binary encoding for constant fields
+        red_bytes = PrimaryColor.SERIALIZER.to_bytes(PrimaryColor.RED)
+        self.assertEqual(red_bytes, b"soia\n")
+
+        green_bytes = PrimaryColor.SERIALIZER.to_bytes(PrimaryColor.GREEN)
+        self.assertTrue(green_bytes, b"soia\x02")
+
+        blue_bytes = PrimaryColor.SERIALIZER.to_bytes(PrimaryColor.BLUE)
+        self.assertEqual(blue_bytes, b"soia\x1e")
+
+        # Test binary roundtrips
+        self.assertEqual(
+            PrimaryColor.SERIALIZER.from_bytes(red_bytes), PrimaryColor.RED
+        )
+        self.assertEqual(
+            PrimaryColor.SERIALIZER.from_bytes(green_bytes), PrimaryColor.GREEN
+        )
+        self.assertEqual(
+            PrimaryColor.SERIALIZER.from_bytes(blue_bytes), PrimaryColor.BLUE
+        )
+
+    def test_enum_binary_format_value_fields(self):
+        """Test binary encoding for enum value fields."""
+        module = self.init_test_module()
+        Status = module["Status"]
+
+        # Test binary encoding for value field
+        error_status = Status.wrap_error("test error")
+        error_bytes = Status.SERIALIZER.to_bytes(error_status)
+        self.assertTrue(error_bytes.hex().startswith("736f6961"))  # soia prefix
+
+        # Test binary roundtrip
+        restored = Status.SERIALIZER.from_bytes(error_bytes)
+        self.assertEqual(restored.kind, "error")
+        self.assertEqual(restored.value, "test error")
+        self.assertEqual(restored, error_status)
+
+    def test_enum_binary_roundtrip_all_constant_types(self):
+        """Test that all enum constant types roundtrip correctly through binary."""
+        module = self.init_test_module()
+        Status = module["Status"]
+
+        constant_values = [Status.OK]
+
+        for status in constant_values:
+            # Test binary roundtrip
+            binary_bytes = Status.SERIALIZER.to_bytes(status)
+            restored = Status.SERIALIZER.from_bytes(binary_bytes)
+            self.assertEqual(restored, status)
+
+    def test_enum_binary_roundtrip_value_fields(self):
+        """Test binary roundtrip for enum value fields."""
+        module = self.init_test_module()
+        Status = module["Status"]
+
+        # Test with various error messages
+        test_cases = [
+            "simple error",
+            "error with\nnewlines",
+            "",
+            "error with special chars: \u0000\uffff",
+        ]
+
+        for error_msg in test_cases:
+            error_status = Status.wrap_error(error_msg)
+            binary_bytes = Status.SERIALIZER.to_bytes(error_status)
+            restored = Status.SERIALIZER.from_bytes(binary_bytes)
+
+            self.assertEqual(restored.kind, "error")
+            self.assertEqual(restored.value, error_msg)
+            self.assertEqual(restored, error_status)
+
+    def test_enum_binary_unknown_constant(self):
+        """Test binary encoding for unknown enum constant."""
+        module = self.init_test_module()
+        PrimaryColor = module["PrimaryColor"]
+
+        # Test unknown constant
+        unknown = PrimaryColor.UNKNOWN
+        unknown_bytes = PrimaryColor.SERIALIZER.to_bytes(unknown)
+        self.assertTrue(unknown_bytes.hex().startswith("736f6961"))
+
+        # Roundtrip should return UNKNOWN
+        restored = PrimaryColor.SERIALIZER.from_bytes(unknown_bytes)
+        self.assertEqual(restored.kind, "?")
+        self.assertEqual(restored, PrimaryColor.UNKNOWN)
+
+    def test_enum_binary_complex_value_types(self):
+        """Test binary serialization with complex enum value types."""
+        module = self.init_test_module()
+        JsonValue = module["JsonValue"]
+
+        # Test with string value
+        string_val = JsonValue.wrap_string("hello world")
+        string_bytes = JsonValue.SERIALIZER.to_bytes(string_val)
+        restored_string = JsonValue.SERIALIZER.from_bytes(string_bytes)
+        self.assertEqual(restored_string.kind, "string")
+        self.assertEqual(restored_string.value, "hello world")
+
+        # Test with number value
+        number_val = JsonValue.wrap_number(3.14159)
+        number_bytes = JsonValue.SERIALIZER.to_bytes(number_val)
+        restored_number = JsonValue.SERIALIZER.from_bytes(number_bytes)
+        self.assertEqual(restored_number.kind, "number")
+        self.assertAlmostEqual(restored_number.value, 3.14159, places=10)
+
+        # Test with bool value
+        bool_val = JsonValue.wrap_bool(True)
+        bool_bytes = JsonValue.SERIALIZER.to_bytes(bool_val)
+        restored_bool = JsonValue.SERIALIZER.from_bytes(bool_bytes)
+        self.assertEqual(restored_bool.kind, "bool")
+        self.assertEqual(restored_bool.value, True)
+
+        # Test with NULL constant
+        null_val = JsonValue.NULL
+        null_bytes = JsonValue.SERIALIZER.to_bytes(null_val)
+        restored_null = JsonValue.SERIALIZER.from_bytes(null_bytes)
+        self.assertEqual(restored_null.kind, "NULL")
+        self.assertEqual(restored_null, JsonValue.NULL)
+
+    def test_enum_binary_nested_structures(self):
+        """Test binary serialization of enums with nested struct values."""
+        module = self.init_test_module()
+        JsonValue = module["JsonValue"]
+        JsonObjectEntry = JsonValue.ObjectEntry
+
+        # Create an object with entries
+        obj = JsonValue.create_object(
+            entries=[
+                JsonObjectEntry(name="key1", value=JsonValue.wrap_string("value1")),
+                JsonObjectEntry(name="key2", value=JsonValue.wrap_number(42.0)),
+                JsonObjectEntry(name="key3", value=JsonValue.wrap_bool(False)),
+            ]
+        )
+
+        # Binary roundtrip
+        obj_bytes = JsonValue.SERIALIZER.to_bytes(obj)
+        restored = JsonValue.SERIALIZER.from_bytes(obj_bytes)
+
+        self.assertEqual(restored.kind, "object")
+        self.assertEqual(len(restored.value.entries), 3)
+        self.assertEqual(restored.value.entries[0].name, "key1")
+        self.assertEqual(restored.value.entries[0].value.kind, "string")
+        self.assertEqual(restored.value.entries[0].value.value, "value1")
+        self.assertEqual(restored.value.entries[1].name, "key2")
+        self.assertEqual(restored.value.entries[1].value.kind, "number")
+        self.assertEqual(restored.value.entries[1].value.value, 42.0)
+        self.assertEqual(restored.value.entries[2].name, "key3")
+        self.assertEqual(restored.value.entries[2].value.kind, "bool")
+        self.assertEqual(restored.value.entries[2].value.value, False)
+
+    def test_enum_binary_array_values(self):
+        """Test binary serialization of enum with array value fields."""
+        module = self.init_test_module()
+        JsonValue = module["JsonValue"]
+
+        # Test with empty array
+        empty_array = JsonValue.wrap_array([])
+        empty_bytes = JsonValue.SERIALIZER.to_bytes(empty_array)
+        restored_empty = JsonValue.SERIALIZER.from_bytes(empty_bytes)
+        self.assertEqual(restored_empty.kind, "array")
+        self.assertEqual(len(restored_empty.value), 0)
+
+        # Test with array of mixed types
+        mixed_array = JsonValue.wrap_array(
+            [
+                JsonValue.NULL,
+                JsonValue.wrap_bool(True),
+                JsonValue.wrap_number(3.14),
+                JsonValue.wrap_string("test"),
+            ]
+        )
+        mixed_bytes = JsonValue.SERIALIZER.to_bytes(mixed_array)
+        restored_mixed = JsonValue.SERIALIZER.from_bytes(mixed_bytes)
+        self.assertEqual(restored_mixed.kind, "array")
+        self.assertEqual(len(restored_mixed.value), 4)
+        self.assertEqual(restored_mixed.value[0], JsonValue.NULL)
+        self.assertEqual(restored_mixed.value[1].kind, "bool")
+        self.assertEqual(restored_mixed.value[1].value, True)
+        self.assertEqual(restored_mixed.value[2].kind, "number")
+        self.assertAlmostEqual(restored_mixed.value[2].value, 3.14, places=10)
+        self.assertEqual(restored_mixed.value[3].kind, "string")
+        self.assertEqual(restored_mixed.value[3].value, "test")
+
+    def test_enum_binary_deeply_nested_arrays(self):
+        """Test binary serialization with deeply nested array values."""
+        module = self.init_test_module()
+        JsonValue = module["JsonValue"]
+
+        # Create nested arrays: [[[]]]
+        inner_array = JsonValue.wrap_array([])
+        middle_array = JsonValue.wrap_array([inner_array])
+        outer_array = JsonValue.wrap_array([middle_array])
+
+        outer_bytes = JsonValue.SERIALIZER.to_bytes(outer_array)
+        restored = JsonValue.SERIALIZER.from_bytes(outer_bytes)
+
+        self.assertEqual(restored.kind, "array")
+        self.assertEqual(len(restored.value), 1)
+        self.assertEqual(restored.value[0].kind, "array")
+        self.assertEqual(len(restored.value[0].value), 1)
+        self.assertEqual(restored.value[0].value[0].kind, "array")
+        self.assertEqual(len(restored.value[0].value[0].value), 0)
+
+    def test_enum_binary_multiple_roundtrips(self):
+        """Test that multiple binary serialization roundtrips preserve enum data."""
+        module = self.init_test_module()
+        Status = module["Status"]
+
+        original = Status.wrap_error("original error message")
+        current = original
+
+        # Do multiple roundtrips
+        for _ in range(5):
+            binary_bytes = Status.SERIALIZER.to_bytes(current)
+            current = Status.SERIALIZER.from_bytes(binary_bytes)
+
+        # Should still be equal
+        self.assertEqual(current.kind, original.kind)
+        self.assertEqual(current.value, original.value)
+        self.assertEqual(current, original)
+
+    def test_enum_binary_field_number_ranges(self):
+        """Test that enum field numbers work correctly in binary format."""
+        module = self.init_test_module()
+        PrimaryColor = module["PrimaryColor"]
+
+        # PrimaryColor has field numbers 10, 20, 30
+        test_cases = [
+            (PrimaryColor.RED, 10),
+            (PrimaryColor.GREEN, 20),
+            (PrimaryColor.BLUE, 30),
+        ]
+
+        for color, expected_number in test_cases:
+            binary_bytes = PrimaryColor.SERIALIZER.to_bytes(color)
+            restored = PrimaryColor.SERIALIZER.from_bytes(binary_bytes)
+            self.assertEqual(restored, color)
+
+    def test_enum_binary_consistency_across_formats(self):
+        """Test that binary format produces consistent results."""
+        module = self.init_test_module()
+        Status = module["Status"]
+
+        # Create the same enum value multiple times
+        status1 = Status.wrap_error("test")
+        status2 = Status.wrap_error("test")
+
+        bytes1 = Status.SERIALIZER.to_bytes(status1)
+        bytes2 = Status.SERIALIZER.to_bytes(status2)
+
+        # Should produce identical binary output
+        self.assertEqual(bytes1, bytes2)
+
+        # Both should restore to equivalent values
+        restored1 = Status.SERIALIZER.from_bytes(bytes1)
+        restored2 = Status.SERIALIZER.from_bytes(bytes2)
+        self.assertEqual(restored1, restored2)
+
+    def test_enum_binary_edge_case_values(self):
+        """Test enum binary serialization with edge case values."""
+        module = self.init_test_module()
+        Status = module["Status"]
+        JsonValue = module["JsonValue"]
+
+        # Test with empty string
+        empty_error = Status.wrap_error("")
+        empty_bytes = Status.SERIALIZER.to_bytes(empty_error)
+        restored_empty = Status.SERIALIZER.from_bytes(empty_bytes)
+        self.assertEqual(restored_empty.value, "")
+
+        # Test with very long string
+        long_error = Status.wrap_error("x" * 10000)
+        long_bytes = Status.SERIALIZER.to_bytes(long_error)
+        restored_long = Status.SERIALIZER.from_bytes(long_bytes)
+        self.assertEqual(restored_long.value, "x" * 10000)
+
+        # Test with special unicode characters
+        unicode_error = Status.wrap_error("\u0000\uffff\U0001f600")
+        unicode_bytes = Status.SERIALIZER.to_bytes(unicode_error)
+        restored_unicode = Status.SERIALIZER.from_bytes(unicode_bytes)
+        self.assertEqual(restored_unicode.value, "\u0000\uffff\U0001f600")
+
+        # Test with extreme float values
+        inf_val = JsonValue.wrap_number(float("inf"))
+        inf_bytes = JsonValue.SERIALIZER.to_bytes(inf_val)
+        restored_inf = JsonValue.SERIALIZER.from_bytes(inf_bytes)
+        self.assertEqual(restored_inf.value, float("inf"))
+
+        neg_inf_val = JsonValue.wrap_number(float("-inf"))
+        neg_inf_bytes = JsonValue.SERIALIZER.to_bytes(neg_inf_val)
+        restored_neg_inf = JsonValue.SERIALIZER.from_bytes(neg_inf_bytes)
+        self.assertEqual(restored_neg_inf.value, float("-inf"))
+
+    def test_enum_binary_mixed_enum_and_struct(self):
+        """Test binary serialization when enums contain struct fields."""
+        module = self.init_test_module()
+        JsonValue = module["JsonValue"]
+        JsonObject = JsonValue.Object
+        JsonObjectEntry = JsonValue.ObjectEntry
+
+        # Create complex nested structure
+        complex_obj = JsonValue.wrap_object(
+            JsonObject(
+                entries=[
+                    JsonObjectEntry(
+                        name="nested",
+                        value=JsonValue.wrap_object(
+                            JsonObject(
+                                entries=[
+                                    JsonObjectEntry(
+                                        name="inner",
+                                        value=JsonValue.wrap_string("deep value"),
+                                    )
+                                ]
+                            )
+                        ),
+                    )
+                ]
+            )
+        )
+
+        # Binary roundtrip
+        complex_bytes = JsonValue.SERIALIZER.to_bytes(complex_obj)
+        restored = JsonValue.SERIALIZER.from_bytes(complex_bytes)
+
+        self.assertEqual(restored.kind, "object")
+        self.assertEqual(len(restored.value.entries), 1)
+        self.assertEqual(restored.value.entries[0].name, "nested")
+        nested = restored.value.entries[0].value
+        self.assertEqual(nested.kind, "object")
+        self.assertEqual(len(nested.value.entries), 1)
+        self.assertEqual(nested.value.entries[0].name, "inner")
+        self.assertEqual(nested.value.entries[0].value.kind, "string")
+        self.assertEqual(nested.value.entries[0].value.value, "deep value")
