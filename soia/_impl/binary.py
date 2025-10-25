@@ -13,10 +13,14 @@ def encode_int32(input_val: int, buffer: bytearray) -> None:
             buffer.append((input_val + 256) & 0xFF)
         elif input_val >= -65536:
             buffer.append(236)
-            buffer.extend(struct.pack("<h", input_val + 65536))
+            buffer.extend(struct.pack("<H", input_val + 65536))
         else:
             buffer.append(237)
-            buffer.extend(struct.pack("<i", input_val))
+            buffer.extend(
+                struct.pack(
+                    "<i", -2147483648 if input_val <= -2147483648 else input_val
+                )
+            )
     elif input_val < 232:
         buffer.append(input_val)
     elif input_val < 65536:
@@ -24,7 +28,9 @@ def encode_int32(input_val: int, buffer: bytearray) -> None:
         buffer.extend(struct.pack("<H", input_val))
     else:
         buffer.append(233)
-        buffer.extend(struct.pack("<I", input_val))
+        buffer.extend(
+            struct.pack("<I", input_val if input_val <= 2147483647 else 2147483647)
+        )
 
 
 def encode_int64(value: int, buffer: bytearray) -> None:
@@ -32,12 +38,21 @@ def encode_int64(value: int, buffer: bytearray) -> None:
         encode_int32(value, buffer)
     else:
         buffer.append(238)
-        buffer.extend(struct.pack("<q", value))
+        buffer.extend(
+            struct.pack(
+                "<q",
+                (
+                    -9223372036854775808
+                    if value <= -9223372036854775808
+                    else value if value <= 9223372036854775807 else 9223372036854775807
+                ),
+            )
+        )
 
 
 def encode_uint64(value: int, buffer: bytearray) -> None:
     if value < 232:
-        buffer.append(value)
+        buffer.append(0 if value <= 0 else value)
     elif value < 65536:
         buffer.append(232)
         buffer.extend(struct.pack("<H", value))
@@ -46,7 +61,11 @@ def encode_uint64(value: int, buffer: bytearray) -> None:
         buffer.extend(struct.pack("<I", value))
     else:
         buffer.append(234)
-        buffer.extend(struct.pack("<Q", value))
+        buffer.extend(
+            struct.pack(
+                "<Q", value if value <= 18446744073709551615 else 18446744073709551615
+            )
+        )
 
 
 def encode_float32(value: float, buffer: bytearray) -> None:
@@ -116,24 +135,31 @@ def make_decode_number_fn(
             return target_max_int
 
     def make_return_expr(
-        raw: str, min_int: int, max_int: int, is_float: bool
+        raw: ExprLike, min_int: int, max_int: int, is_float: bool
     ) -> ExprLike:
         if target_type == "bool":
-            return f"True if {raw} else False"
+            return Expr.join("True if ", raw, " else False")
         elif target_type == "float":
             if is_float:
                 return raw
             else:
-                return f"{raw} + 0.0"
+                return Expr.join(raw, " + 0.0")
         elif is_float:
-            return f"int({raw})"
+            return Expr.join("int(", raw, ")")
         elif target_min_int <= min_int and max_int <= target_max_int:
             return raw
         else:
-            return Expr.join(Expr.local("clamp", clamp), f"({raw})")
+            return Expr.join(Expr.local("clamp", clamp), "(", raw, ")")
+
+    def make_unpack_expr(fmt: str, num_bytes: int, offset: int = 0) -> Expr:
+        return Expr.join(
+            Expr.local("unpack", struct.unpack),
+            f"('{fmt}', stream.read({num_bytes}))[0]",
+            "" if offset == 0 else f" + {offset}",
+        )
 
     body_builder = BodyBuilder()
-    body_builder.append_ln("wire = stream.bytes[stream.position]")
+    body_builder.append_ln("wire = stream.buffer[stream.position]")
     body_builder.append_ln("stream.position += 1")
     body_builder.append_ln("if wire < 232:")
     body_builder.append_ln(" return ", make_return_expr("wire", 0, 231, False))
@@ -143,71 +169,58 @@ def make_decode_number_fn(
     # 16-bit unsigned integer
     body_builder.append_ln(
         "   return ",
-        make_return_expr("struct.unpack('<H', stream.read(2))[0]", 0, 65535, False),
+        make_return_expr(make_unpack_expr("<H", 2), 0, 65535, False),
     )
     body_builder.append_ln("  elif wire == 233:")
     # 32-bit unsigned integer
     body_builder.append_ln(
         "   return ",
-        make_return_expr(
-            "struct.unpack('<I', stream.read(4))[0]", 0, 4294967295, False
-        ),
+        make_return_expr(make_unpack_expr("<I", 4), 0, 4294967295, False),
     )
     body_builder.append_ln("  elif wire == 234:")
     # 64-bit unsigned integer
     body_builder.append_ln(
         "   return ",
-        make_return_expr(
-            "struct.unpack('<Q', stream.read(8))[0]", 0, 18446744073709551615, False
-        ),
+        make_return_expr(make_unpack_expr("<Q", 8), 0, 18446744073709551615, False),
     )
     body_builder.append_ln(" elif wire == 235:")
     # 8-bit signed integer (offset by 256)
     body_builder.append_ln(
         "  return ",
-        make_return_expr(
-            "struct.unpack('<B', stream.read(1))[0] - 256", -256, -1, False
-        ),
+        make_return_expr(make_unpack_expr("<B", 1, -256), -256, -1, False),
     )
     body_builder.append_ln(" else:")  # 236
     # 16-bit signed integer (offset by 65536)
     body_builder.append_ln(
         "  return ",
-        make_return_expr(
-            "struct.unpack('<H', stream.read(2))[0] - 65536", -65536, -1, False
-        ),
+        make_return_expr(make_unpack_expr("<H", 2, -65536), -65536, -1, False),
     )
     body_builder.append_ln("elif wire <= 239:")  # 237-239
     body_builder.append_ln(" if wire == 237:")
     # 32-bit signed integer
     body_builder.append_ln(
         "  return ",
-        make_return_expr(
-            "struct.unpack('<i', stream.read(4))[0]", -2147483648, 2147483647, False
-        ),
+        make_return_expr(make_unpack_expr("<i", 4), -2147483648, 2147483647, False),
     )
     body_builder.append_ln(" else:")  # 238-239
     # 64-bit signed integer
     body_builder.append_ln(
         "  return ",
         make_return_expr(
-            "struct.unpack('<q', stream.read(8))[0]",
-            -9223372036854775808,
-            9223372036854775807,
-            False,
+            make_unpack_expr("<q", 8), -9223372036854775808, 9223372036854775807, False
         ),
     )
     body_builder.append_ln("elif wire == 240:")
     # 32-bit float
     body_builder.append_ln(
         " return ",
-        make_return_expr("struct.unpack('<f', stream.read(4))[0]", 0, 0, True),
+        make_return_expr(make_unpack_expr("<f", 4), 0, 0, True),
     )
     body_builder.append_ln("elif wire == 241:")
     # 64-bit float
     body_builder.append_ln(
         " return ",
-        make_return_expr("struct.unpack('<d', stream.read(8))[0]", 0, 0, True),
+        make_return_expr(make_unpack_expr("<d", 8), 0, 0, True),
     )
     body_builder.append_ln("else:")
     body_builder.append_ln(" raise ValueError(f'Unsupported wire type: {wire}')")

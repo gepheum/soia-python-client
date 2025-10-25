@@ -881,7 +881,7 @@ def _make_decode_fn(
     num_slots_incl_removed: int,
 ) -> Callable[[ByteStream], Any]:
     builder = BodyBuilder()
-    builder.append_ln("wire = stream.bytes[stream.position]")
+    builder.append_ln("wire = stream.buffer[stream.position]")
     builder.append_ln("stream.position += 1")
     builder.append_ln("if wire in (0, 246):")
     builder.append_ln("  return ", Expr.local("DEFAULT", frozen_class.DEFAULT))
@@ -923,7 +923,7 @@ def _make_decode_fn(
     builder.append_ln(
         "    ret._unrecognized = ",
         Expr.local("UnrecognizedFields", _UnrecognizedFields.from_bytes),
-        "(raw_bytes=stream.bytes[start_offset:end_offset], adjusted_bytes_array_len=array_len)",
+        "(raw_bytes=stream.buffer[start_offset:end_offset], adjusted_bytes_array_len=array_len)",
     )
     builder.append_ln("  else:")
     builder.append_ln(f"    for _ in range(array_len - {num_slots_incl_removed}):")

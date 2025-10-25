@@ -593,7 +593,7 @@ def _make_decode_fn(
 
     builder = BodyBuilder()
     builder.append_ln("start_offset = stream.position")
-    builder.append_ln("wire = stream.bytes[start_offset]")
+    builder.append_ln("wire = stream.buffer[start_offset]")
     builder.append_ln("if wire <= 238:")
     # A number
     builder.append_ln("  if wire < 232:")
@@ -610,7 +610,7 @@ def _make_decode_fn(
     if removed_numbers:
         builder.append_ln(f"      if json in {removed_numbers_tuple}:")
         builder.append_ln("        return ", unknown_constant_local)
-    builder.append_ln("      bytes = stream.bytes[start_offset:stream.position]")
+    builder.append_ln("      bytes = stream.buffer[start_offset:stream.position]")
     builder.append_ln("      return ", unrecognized_class_local, "(0, bytes)")
     # An array of 2
     builder.append_ln("stream.position += 1")
