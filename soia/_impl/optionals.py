@@ -48,8 +48,12 @@ class _OptionalAdapter(Generic[T], TypeAdapter[T | None]):
             ")",
         )
 
-    def from_json_expr(self, json_expr: ExprLike) -> ExprLike:
-        other_from_json = self.other_adapter.from_json_expr(json_expr)
+    def from_json_expr(
+        self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
+    ) -> ExprLike:
+        other_from_json = self.other_adapter.from_json_expr(
+            json_expr, keep_unrecognized_expr
+        )
         if other_from_json == json_expr:
             return json_expr
         return Expr.join(

@@ -64,7 +64,9 @@ class TypeAdapter(Protocol, Generic[T]):
         """
         ...
 
-    def from_json_expr(self, json_expr: ExprLike) -> ExprLike:
+    def from_json_expr(
+        self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
+    ) -> ExprLike:
         """
         Transforms 'json_expr' into a T.
         The 'json_expr' arg is obtained by calling 'json.loads()'.

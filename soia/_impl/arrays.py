@@ -89,13 +89,15 @@ class _ArrayAdapter(Generic[T], TypeAdapter[tuple[T, ...]]):
             "]",
         )
 
-    def from_json_expr(self, json_expr: ExprLike) -> Expr:
+    def from_json_expr(
+        self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
+    ) -> Expr:
         listuple_class_local = Expr.local("_lstpl?", self.listuple_class)
         empty_listuple_local = Expr.local("_emp?", self.empty_listuple)
         return Expr.join(
             listuple_class_local,
             "([",
-            self.item_adapter.from_json_expr("_e"),
+            self.item_adapter.from_json_expr("_e", keep_unrecognized_expr),
             " for _e in ",
             json_expr,
             "] or ",

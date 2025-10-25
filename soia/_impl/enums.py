@@ -134,14 +134,28 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
     def to_json_expr(self, in_expr: ExprLike, readable: bool) -> Expr:
         return Expr.join(in_expr, "._rj" if readable else "._dj")
 
-    def from_json_expr(self, json_expr: ExprLike) -> Expr:
+    def from_json_expr(
+        self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
+    ) -> Expr:
         fn_name = "_fj"
         from_json_fn = getattr(self.gen_class, fn_name, None)
         if from_json_fn:
-            return Expr.join(Expr.local("_fj?", from_json_fn), "(", json_expr, ")")
+            return Expr.join(
+                Expr.local("_fj?", from_json_fn),
+                "(",
+                json_expr,
+                ", ",
+                keep_unrecognized_expr,
+                ")",
+            )
         else:
             return Expr.join(
-                Expr.local("_cls?", self.gen_class), f".{fn_name}(", json_expr, ")"
+                Expr.local("_cls?", self.gen_class),
+                f".{fn_name}(",
+                json_expr,
+                ", ",
+                keep_unrecognized_expr,
+                ")",
             )
 
     def encode_fn(self) -> Callable[[T, bytearray], None]:
@@ -476,7 +490,9 @@ def _make_from_json_fn(
             number = numbers[0]
             field = number_to_value_field[number]
             value_class_local = Expr.local("cls?", field.value_class)
-            value_expr = field.field_type.from_json_expr("json[1]")
+            value_expr = field.field_type.from_json_expr(
+                "json[1]", "keep_unrecognized_fields"
+            )
             builder.append_ln(f"{indent}ret = ", value_class_local, "()")
             builder.append_ln(
                 indent, obj_setattr_local, '(ret, "value", ', value_expr, ")"
@@ -526,7 +542,9 @@ def _make_from_json_fn(
             name = names[0]
             field = name_to_value_field[name]
             value_class_local = Expr.local("cls?", field.value_class)
-            value_expr = field.field_type.from_json_expr("json['value']")
+            value_expr = field.field_type.from_json_expr(
+                "json['value']", "keep_unrecognized_fields"
+            )
             builder.append_ln(f"{indent}ret = ", value_class_local, "()")
             builder.append_ln(
                 indent, obj_setattr_local, '(ret, "value", ', value_expr, ")"
@@ -562,7 +580,7 @@ def _make_from_json_fn(
 
     return make_function(
         name="from_json",
-        params=["json"],
+        params=["json", "keep_unrecognized_fields"],
         body=builder.build(),
     )
 

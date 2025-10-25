@@ -29,7 +29,7 @@ class Serializer(Generic[T]):
     _adapter: TypeAdapter[T]
     _to_dense_json_fn: Callable[[T], Any]
     _to_readable_json_fn: Callable[[T], Any]
-    _from_json_fn: Callable[[Any], T]
+    _from_json_fn: Callable[[Any, bool], T]
     _encode_fn: Callable[[T, bytearray], None]
     _decode_fn: Callable[[ByteStream], T]
 
@@ -61,11 +61,13 @@ class Serializer(Generic[T]):
         else:
             return jsonlib.dumps(self._to_dense_json_fn(input), separators=(",", ":"))
 
-    def from_json(self, json: Any) -> T:
-        return self._from_json_fn(json)
+    def from_json(self, json: Any, keep_unrecognized_fields: bool = False) -> T:
+        return self._from_json_fn(json, keep_unrecognized_fields)
 
-    def from_json_code(self, json_code: str) -> T:
-        return self._from_json_fn(jsonlib.loads(json_code))
+    def from_json_code(
+        self, json_code: str, keep_unrecognized_fields: bool = False
+    ) -> T:
+        return self._from_json_fn(jsonlib.loads(json_code), keep_unrecognized_fields)
 
     def to_bytes(self, input: T) -> bytes:
         buffer = bytearray(b"soia")
@@ -122,11 +124,13 @@ def _make_to_json_fn(adapter: TypeAdapter[T], readable: bool) -> Callable[[T], A
     )
 
 
-def _make_from_json_fn(adapter: TypeAdapter[T]) -> Callable[[Any], T]:
+def _make_from_json_fn(adapter: TypeAdapter[T]) -> Callable[[Any, bool], T]:
     return make_function(
         name="from_json",
-        params=["json"],
+        params=["json", "keep_unrecognized_fields"],
         body=[
-            LineSpan.join("return ", adapter.from_json_expr(Expr.join("json"))),
+            LineSpan.join(
+                "return ", adapter.from_json_expr("json", "keep_unrecognized_fields")
+            ),
         ],
     )

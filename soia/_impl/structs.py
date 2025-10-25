@@ -245,15 +245,29 @@ class StructAdapter(Generic[T], TypeAdapter[T]):
     ) -> Expr:
         return Expr.join(in_expr, "._trj" if readable else "._tdj", "()")
 
-    def from_json_expr(self, json_expr: ExprLike) -> Expr:
+    def from_json_expr(
+        self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
+    ) -> Expr:
         fn_name = "_fj"
         # The _fj method may not have been added to the class yet.
         from_json_fn = getattr(self.gen_class, fn_name, None)
         if from_json_fn:
-            return Expr.join(Expr.local("_fj?", from_json_fn), "(", json_expr, ")")
+            return Expr.join(
+                Expr.local("_fj?", from_json_fn),
+                "(",
+                json_expr,
+                ", ",
+                keep_unrecognized_expr,
+                ")",
+            )
         else:
             return Expr.join(
-                Expr.local("_cls?", self.gen_class), f".{fn_name}(", json_expr, ")"
+                Expr.local("_cls?", self.gen_class),
+                f".{fn_name}(",
+                json_expr,
+                ", ",
+                keep_unrecognized_expr,
+                ")",
             )
 
     def get_type(self) -> reflection.Type:
@@ -829,7 +843,7 @@ def _make_from_json_fn(
             f"  ret.{field.field.attribute} = ",
             field.type.default_expr(),
             f" if array_len <= {number} else ",
-            field.type.from_json_expr(item_expr),
+            field.type.from_json_expr(item_expr, "keep_unrecognized_fields"),
         )
     if fields:
         num_slots_excl_removed = fields[-1].field.number + 1
@@ -861,7 +875,7 @@ def _make_from_json_fn(
         builder.append_ln(f"    array_len = {field.field.number + 1}")
         builder.append_ln(
             f"    {lvalue} = ",
-            field.type.from_json_expr(f'json["{name}"]'),
+            field.type.from_json_expr(f'json["{name}"]', "keep_unrecognized_fields"),
         )
         builder.append_ln("  else:")
         builder.append_ln(f"    {lvalue} = ", field.type.default_expr())
@@ -874,7 +888,7 @@ def _make_from_json_fn(
 
     return make_function(
         name="from_json",
-        params=["json"],
+        params=["json", "keep_unrecognized_fields"],
         body=builder.build(),
     )
 

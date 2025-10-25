@@ -63,7 +63,9 @@ class _BoolAdapter(AbstractPrimitiveAdapter[bool]):
         else:
             return Expr.join("(1 if ", in_expr, " else 0)")
 
-    def from_json_expr(self, json_expr: ExprLike) -> Expr:
+    def from_json_expr(
+        self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
+    ) -> Expr:
         return Expr.join("(True if ", json_expr, " else False)")
 
     @staticmethod
@@ -103,7 +105,9 @@ class _AbstractIntAdapter(AbstractPrimitiveAdapter[int]):
     def is_not_default_expr(self, arg_expr: ExprLike, attr_expr: ExprLike) -> ExprLike:
         return arg_expr
 
-    def from_json_expr(self, json_expr: ExprLike) -> Expr:
+    def from_json_expr(
+        self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
+    ) -> Expr:
         # Must accept float inputs and string inputs and turn them into ints.
         return Expr.join(
             "(0).__class__(",
@@ -222,7 +226,9 @@ class _AbstractFloatAdapter(AbstractPrimitiveAdapter[float]):
     def to_json_expr(self, in_expr: ExprLike, readable: bool) -> ExprLike:
         return in_expr
 
-    def from_json_expr(self, json_expr: ExprLike) -> Expr:
+    def from_json_expr(
+        self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
+    ) -> Expr:
         return Expr.join("(", json_expr, " + 0.0)")
 
     def decode_fn(self) -> Callable[[ByteStream], float]:
@@ -295,7 +301,9 @@ class _TimestampAdapter(AbstractPrimitiveAdapter[Timestamp]):
         else:
             return Expr.join(in_expr, ".unix_millis")
 
-    def from_json_expr(self, json_expr: ExprLike) -> Expr:
+    def from_json_expr(
+        self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
+    ) -> Expr:
         fn = Expr.local("_timestamp_from_json", _timestamp_from_json)
         return Expr.join(fn, "(", json_expr, ")")
 
@@ -351,7 +359,9 @@ class _StringAdapter(AbstractPrimitiveAdapter[str]):
     def to_json_expr(self, in_expr: ExprLike, readable: bool) -> ExprLike:
         return in_expr
 
-    def from_json_expr(self, json_expr: ExprLike) -> Expr:
+    def from_json_expr(
+        self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
+    ) -> Expr:
         return Expr.join("('' + (", json_expr, " or ''))")
 
     @staticmethod
@@ -417,7 +427,9 @@ class _BytesAdapter(AbstractPrimitiveAdapter[bytes]):
             ").decode('utf-8')",
         )
 
-    def from_json_expr(self, json_expr: ExprLike) -> Expr:
+    def from_json_expr(
+        self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
+    ) -> Expr:
         return Expr.join(
             Expr.local("b64decode", base64.b64decode), "(", json_expr, ' or "")'
         )
