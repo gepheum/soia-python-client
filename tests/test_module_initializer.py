@@ -1813,6 +1813,57 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(restored_empty.x, 0.0)
         self.assertEqual(restored_empty.y, 0.0)
 
+    def test_struct_binary_with_drop_unrecognized_fields(self):
+        """Test that keep_unrecognized_fields=False (default) drops unrecognized fields in binary format."""
+        module = self.init_test_module()
+        Point = module["Point"]
+
+        # Create a point with unrecognized fields via JSON
+        point_from_json = Point.SERIALIZER.from_json(
+            [1.5, 0, 2.5, 100], keep_unrecognized_fields=True
+        )
+        # This point has unrecognized field at index 3
+        self.assertEqual(Point.SERIALIZER.to_json(point_from_json), [1.5, 0, 2.5, 100])
+
+        # Now convert to binary and back WITHOUT keep_unrecognized_fields
+        binary_bytes = Point.SERIALIZER.to_bytes(point_from_json)
+        restored_drop = Point.SERIALIZER.from_bytes(binary_bytes)  # default is False
+
+        # The unrecognized field should be dropped
+        self.assertEqual(restored_drop.x, 1.5)
+        self.assertEqual(restored_drop.y, 2.5)
+        # Verify it round-trips through JSON WITHOUT the unrecognized field
+        self.assertEqual(Point.SERIALIZER.to_json(restored_drop), [1.5, 0, 2.5])
+
+        # Test that mutable roundtrip also drops unrecognized fields
+        mutable = restored_drop.to_mutable().to_frozen()
+        self.assertEqual(Point.SERIALIZER.to_json(mutable), [1.5, 0, 2.5])
+
+    def test_struct_binary_format_with_removed_fields_drop_unrecognized(self):
+        """Test binary format drops removed field data when keep_unrecognized_fields=False."""
+        module = self.init_test_module()
+        Foobar = module["Foobar"]
+
+        # Foobar has removed_numbers=(0, 2)
+        # Create from JSON with data in removed field positions
+        foobar_from_json = Foobar.SERIALIZER.from_json(
+            [5, 10, 15, 20, [1.0]], keep_unrecognized_fields=True
+        )
+
+        # Convert to binary and back WITHOUT keep_unrecognized_fields
+        binary_bytes = Foobar.SERIALIZER.to_bytes(foobar_from_json)
+        restored = Foobar.SERIALIZER.from_bytes(binary_bytes)  # default drops
+
+        # Verify the recognized fields are correct
+        self.assertEqual(restored.a, 10)
+        self.assertEqual(restored.b, 20)
+        self.assertEqual(restored.point.x, 1.0)
+
+        # Verify unrecognized/removed fields are dropped through JSON
+        restored_json = Foobar.SERIALIZER.to_json(restored)
+        # Should only have recognized fields, removed fields should be 0
+        self.assertEqual(restored_json, [0, 10, 0, 20, [1.0]])
+
     def test_enum_binary_format_constants(self):
         """Test binary encoding for enum constant fields."""
         module = self.init_test_module()

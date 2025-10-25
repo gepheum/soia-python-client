@@ -715,7 +715,7 @@ def _make_to_dense_json_fn(
 ) -> Callable[[Any], Any]:
     builder = BodyBuilder()
     builder.append_ln(
-        "l = self._unrecognized.adjusted_json_array_len if self._unrecognized else self._array_len"
+        "l = (self._unrecognized.adjusted_json_array_len if self._unrecognized else None) or self._array_len"
     )
     builder.append_ln("ret = [0] * l")
     for field in fields:
@@ -769,8 +769,8 @@ def _make_encode_fn(
 ) -> Callable[[Any, bytearray], None]:
     builder = BodyBuilder()
     builder.append_ln(
-        "l = value._unrecognized.adjusted_bytes_array_len if ",
-        "value._unrecognized else value._array_len",
+        "l = (value._unrecognized.adjusted_bytes_array_len if ",
+        "value._unrecognized else None) or value._array_len",
     )
     builder.append_ln("if l < 4:")
     builder.append_ln("  buffer.append(246 + l)")
