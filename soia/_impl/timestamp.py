@@ -146,7 +146,7 @@ class Timestamp:
             dt = self.to_datetime_or_raise()
         except Exception:
             return ""
-        ret = dt.isoformat()
+        ret = dt.isoformat(timespec="milliseconds")
         bad_suffix = "+00:00"
         if ret.endswith(bad_suffix):
             ret = ret[0 : -len(bad_suffix)] + "Z"

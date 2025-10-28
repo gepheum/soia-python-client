@@ -468,7 +468,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
         self.assertEqual(
             str(p),
-            "Primitives(\n  bool=True,\n  bytes=b'a',\n  f32=3.14,\n  f64=3.14,\n  i32=1,\n  i64=2,\n  u64=3,\n  s='',\n  t=Timestamp(\n    unix_millis=4,\n    _formatted='1970-01-01T00:00:00.004000Z',\n  ),\n)",  # noqa: E501
+            "Primitives(\n  bool=True,\n  bytes=b'a',\n  f32=3.14,\n  f64=3.14,\n  i32=1,\n  i64=2,\n  u64=3,\n  s='',\n  t=Timestamp(\n    unix_millis=4,\n    _formatted='1970-01-01T00:00:00.004Z',\n  ),\n)",  # noqa: E501
         )
 
     def test_from_json_converts_between_ints_and_floats(self):

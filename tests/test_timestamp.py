@@ -127,11 +127,11 @@ class TimestampTestCase(unittest.TestCase):
         a = Timestamp.from_unix_seconds(123456789)
         self.assertEqual(
             repr(a),
-            "Timestamp(\n  unix_millis=123456789000,\n  _formatted='1973-11-29T21:33:09Z',\n)",
+            "Timestamp(\n  unix_millis=123456789000,\n  _formatted='1973-11-29T21:33:09.000Z',\n)",
         )
         self.assertEqual(
             str(a),
-            "Timestamp(\n  unix_millis=123456789000,\n  _formatted='1973-11-29T21:33:09Z',\n)",
+            "Timestamp(\n  unix_millis=123456789000,\n  _formatted='1973-11-29T21:33:09.000Z',\n)",
         )
 
     def test_repr_when_out_of_bounds(self):

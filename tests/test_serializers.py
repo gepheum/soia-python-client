@@ -120,7 +120,7 @@ class SerializersTestCase(unittest.TestCase):
             primitive_serializer("timestamp").to_json_code(
                 Timestamp.from_unix_millis(3), readable=True
             ),
-            '{\n  "unix_millis": 3,\n  "formatted": "1970-01-01T00:00:00.003000Z"\n}',
+            '{\n  "unix_millis": 3,\n  "formatted": "1970-01-01T00:00:00.003Z"\n}',
         )
         self.assertEqual(
             primitive_serializer("timestamp").from_json_code("3"),
