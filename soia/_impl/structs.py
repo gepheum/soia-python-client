@@ -1,10 +1,11 @@
 import copy
+import itertools
 from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
-import itertools
 from typing import Any, Final, Generic, Union, cast
 
 from soia import _spec, reflection
+from soia._impl.binary import decode_int64, decode_unused, encode_length_prefix
 from soia._impl.function_maker import (
     BodyBuilder,
     Expr,
@@ -18,8 +19,7 @@ from soia._impl.function_maker import (
 )
 from soia._impl.keep import KEEP
 from soia._impl.repr import repr_impl
-from soia._impl.type_adapter import T, ByteStream, TypeAdapter
-from soia._impl.binary import decode_int64, decode_unused, encode_length_prefix
+from soia._impl.type_adapter import ByteStream, T, TypeAdapter
 
 
 class StructAdapter(Generic[T], TypeAdapter[T]):
@@ -949,7 +949,9 @@ def _make_decode_fn(
         f"  if array_len > {num_slots_incl_removed} and keep_unrecognized_fields:"
     )
     for _ in range(num_slots_incl_removed - num_slots_excl_removed):
-        builder.append_ln(Expr.local("    decode_unused", decode_unused), "(stream)")
+        builder.append_ln(
+            "    ", Expr.local("decode_unused", decode_unused), "(stream)"
+        )
     builder.append_ln("    start_offset = stream.position")
     builder.append_ln("    for _ in range(array_len - {num_slots_incl_removed}):")
     builder.append_ln("      ", Expr.local("decode_unused", decode_unused), "(stream)")
