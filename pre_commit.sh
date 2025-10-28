@@ -13,6 +13,10 @@ command_exists() {
 echo "🔍 Checking for required tools..."
 missing_tools=()
 
+if ! command_exists isort; then
+    missing_tools+=("isort")
+fi
+
 if ! command_exists black; then
     missing_tools+=("black")
 fi
@@ -44,14 +48,15 @@ if [ -f requirements.txt ] && [ -s requirements.txt ]; then
     fi
 fi
 
+# Check import sorting with isort
+echo "📦 Sorting import with isort..."
+isort .
+echo "✅ Import sorting done!"
+
 # Check code formatting with Black
-echo "🎨 Checking code formatting with Black..."
-if ! black --check --diff .; then
-    echo "❌ Code formatting check failed!"
-    echo "💡 Run 'black .' to fix formatting issues"
-    exit 1
-fi
-echo "✅ Code formatting check passed!"
+echo "🎨 Formatting code with Black..."
+black .
+echo "✅ Code formatting done!"
 
 # Static analysis with flake8
 echo "🔍 Running static analysis with flake8..."

@@ -8,7 +8,7 @@ from soia import _spec, reflection
 from soia._impl.binary import decode_int64, encode_length_prefix
 from soia._impl.function_maker import Any, Expr, ExprLike, Line, make_function
 from soia._impl.keyed_items import Item, Key, KeyedItems
-from soia._impl.type_adapter import T, ByteStream, TypeAdapter
+from soia._impl.type_adapter import ByteStream, T, TypeAdapter
 
 
 def get_array_adapter(

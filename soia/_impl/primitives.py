@@ -20,7 +20,7 @@ from soia._impl.binary import (
 )
 from soia._impl.function_maker import Expr, ExprLike
 from soia._impl.timestamp import Timestamp
-from soia._impl.type_adapter import ByteStream, TypeAdapter, T
+from soia._impl.type_adapter import ByteStream, T, TypeAdapter
 
 
 class AbstractPrimitiveAdapter(TypeAdapter[T]):

@@ -5,7 +5,6 @@ from typing import Generic, Protocol, TypeVar
 from soia import _spec, reflection
 from soia._impl.function_maker import ExprLike
 
-
 T = TypeVar("T")
 
 

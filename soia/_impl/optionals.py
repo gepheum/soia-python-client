@@ -6,7 +6,7 @@ from weakref import WeakValueDictionary
 
 from soia import _spec, reflection
 from soia._impl.function_maker import Expr, ExprLike
-from soia._impl.type_adapter import T, ByteStream, TypeAdapter
+from soia._impl.type_adapter import ByteStream, T, TypeAdapter
 
 
 def get_optional_adapter(other_adapter: TypeAdapter[T]) -> TypeAdapter[T | None]:
