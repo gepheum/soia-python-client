@@ -66,7 +66,7 @@ class _BoolAdapter(AbstractPrimitiveAdapter[bool]):
     def from_json_expr(
         self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
     ) -> Expr:
-        return Expr.join("(True if ", json_expr, " else False)")
+        return Expr.join("(", json_expr, " not in (0, '0'))")
 
     @staticmethod
     def encode(

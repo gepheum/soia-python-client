@@ -13,6 +13,9 @@ class SerializersTestCase(unittest.TestCase):
         self.assertEqual(primitive_serializer("bool").from_json_code("true"), True)
         self.assertEqual(primitive_serializer("bool").from_json_code("false"), False)
         self.assertEqual(primitive_serializer("bool").from_json_code("0"), False)
+        self.assertEqual(primitive_serializer("bool").from_json_code('"0"'), False)
+        self.assertEqual(primitive_serializer("bool").from_json_code("1"), True)
+        self.assertEqual(primitive_serializer("bool").from_json_code('"1"'), True)
 
         self.assertEqual(primitive_serializer("int32").to_json_code(7), "7")
         self.assertEqual(
