@@ -339,7 +339,7 @@ class _TimestampAdapter(AbstractPrimitiveAdapter[Timestamp]):
 def _timestamp_from_json(json: Any) -> Timestamp:
     if json.__class__ is int or isinstance(json, int):
         return Timestamp(unix_millis=json)
-    elif isinstance(json, float):
+    elif isinstance(json, float) or isinstance(json, str):
         return Timestamp(unix_millis=int(json))
     else:
         return Timestamp(unix_millis=json["unix_millis"])
