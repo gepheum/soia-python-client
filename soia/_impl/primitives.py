@@ -407,6 +407,13 @@ class _StringAdapter(AbstractPrimitiveAdapter[str]):
 STRING_ADAPTER: Final[TypeAdapter] = _StringAdapter()
 
 
+def _bytes_from_json(json: str) -> bytes:
+    if json.startswith("hex:"):
+        return bytes.fromhex(json[4:])
+    else:
+        return base64.b64decode(json)
+
+
 class _BytesAdapter(AbstractPrimitiveAdapter[bytes]):
     def default_expr(self) -> ExprLike:
         return 'b""'
@@ -422,18 +429,25 @@ class _BytesAdapter(AbstractPrimitiveAdapter[bytes]):
         in_expr: ExprLike,
         readable: bool,
     ) -> Expr:
-        return Expr.join(
-            Expr.local("b64encode", base64.b64encode),
-            "(",
-            in_expr,
-            ").decode('utf-8')",
-        )
+        if readable:
+            return Expr.join(
+                "('hex:' + ",
+                in_expr,
+                ".hex())",
+            )
+        else:
+            return Expr.join(
+                Expr.local("b64encode", base64.b64encode),
+                "(",
+                in_expr,
+                ").decode('utf-8')",
+            )
 
     def from_json_expr(
         self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
     ) -> Expr:
         return Expr.join(
-            Expr.local("b64decode", base64.b64decode), "(", json_expr, ' or "")'
+            Expr.local("bytes_from_json", _bytes_from_json), "(", json_expr, ' or "")'
         )
 
     @staticmethod
