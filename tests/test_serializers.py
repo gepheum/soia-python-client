@@ -147,6 +147,19 @@ class SerializersTestCase(unittest.TestCase):
             ),
             "[\n  true,\n  false\n]",
         )
+        self.assertEqual(
+            array_serializer(primitive_serializer("bool")).from_json_code(
+                "[ true, false ]"
+            ),
+            (
+                True,
+                False,
+            ),
+        )
+        self.assertEqual(
+            array_serializer(primitive_serializer("bool")).from_json_code("0"),
+            (),
+        )
 
     def test_optional_serializer(self):
         self.assertEqual(

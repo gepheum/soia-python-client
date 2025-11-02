@@ -98,9 +98,9 @@ class _ArrayAdapter(Generic[T], TypeAdapter[tuple[T, ...]]):
             listuple_class_local,
             "([",
             self.item_adapter.from_json_expr("_e", keep_unrecognized_expr),
-            " for _e in ",
+            " for _e in (",
             json_expr,
-            "] or ",
+            " or ())] or ",
             empty_listuple_local,
             ")",
         )
