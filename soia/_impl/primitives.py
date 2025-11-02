@@ -386,7 +386,7 @@ class _StringAdapter(AbstractPrimitiveAdapter[str]):
     @staticmethod
     def decode(stream: ByteStream) -> str:
         wire = stream.read(1)[0]
-        if wire == 242:
+        if wire in (0, 242):
             return ""
         else:
             # Should be wire 243
