@@ -316,14 +316,14 @@ _FIELD_SERIALIZER: Final = _dataclass_serializer(
             "name",
             _primitive_serializer(str),
         ),
+        _FieldSerializer(
+            "number",
+            _primitive_serializer(int),
+        ),
         _FieldSerializer[Optional[Type]](
             "type",
             _optional_serializer(_forwarding_serializer(_type_serializer)),
             default=None,
-        ),
-        _FieldSerializer(
-            "number",
-            _primitive_serializer(int),
         ),
     ],
 )
