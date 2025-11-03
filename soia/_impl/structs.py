@@ -852,14 +852,6 @@ def _make_from_json_fn(
         f"  if array_len <= {num_slots_incl_removed} or not keep_unrecognized_fields:"
     )
     builder.append_ln("    ret._unrecognized = None")
-    builder.append_ln(
-        "    ret._array_len = ",
-        _adjust_array_len_expr(
-            "array_len",
-            removed_numbers=removed_numbers,
-            num_slots_excl_removed=num_slots_excl_removed,
-        ),
-    )
     builder.append_ln("  else:")
     builder.append_ln(
         "    ret._unrecognized = ",
@@ -868,7 +860,14 @@ def _make_from_json_fn(
         Expr.local("deepcopy", copy.deepcopy),
         f"(json[{num_slots_incl_removed}:]), adjusted_json_array_len=array_len)",
     )
-    builder.append_ln(f"    ret._array_len = {num_slots_excl_removed}")
+    builder.append_ln(
+        "  ret._array_len = ",
+        _adjust_array_len_expr(
+            "array_len",
+            removed_numbers=removed_numbers,
+            num_slots_excl_removed=num_slots_excl_removed,
+        ),
+    )
 
     builder.append_ln("else:")
     builder.append_ln("  array_len = 0")
@@ -969,7 +968,7 @@ def _make_decode_fn(
     builder.append_ln("  ret._unrecognized = None")
 
     builder.append_ln(
-        "  ret._array_len = ",
+        "ret._array_len = ",
         _adjust_array_len_expr(
             "array_len",
             removed_numbers=removed_numbers,
