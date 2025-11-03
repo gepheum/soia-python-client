@@ -946,7 +946,7 @@ def _make_decode_fn(
 
     builder.append_ln(f"if array_len > {num_slots_excl_removed}:")
     builder.append_ln(
-        f"  if array_len > {num_slots_incl_removed} and keep_unrecognized_fields:"
+        f"  if array_len > {num_slots_incl_removed} and stream.keep_unrecognized_fields:"
     )
     for _ in range(num_slots_incl_removed - num_slots_excl_removed):
         builder.append_ln(

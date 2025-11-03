@@ -633,7 +633,7 @@ def _make_decode_fn(
     builder.append_ln("    ", Expr.local("decode_unused", decode_unused), "(stream)")
     if removed_numbers:
         builder.append_ln(
-            f"    if number in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+            f"    if number in {removed_numbers_tuple} or not stream.keep_unrecognized_fields:"
         )
         builder.append_ln("      return ", unknown_constant_local)
     builder.append_ln("    bytes = stream.buffer[start_offset:stream.position]")
@@ -673,7 +673,7 @@ def _make_decode_fn(
         # The field was either removed or is an unrecognized field.
         if removed_numbers:
             builder.append_ln(
-                f"if number in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+                f"if number in {removed_numbers_tuple} or not stream.keep_unrecognized_fields:"
             )
             builder.append_ln("  return ", unknown_constant_local)
         builder.append_ln("bytes = stream.buffer[start_offset:stream.position]")
@@ -682,7 +682,7 @@ def _make_decode_fn(
         builder.append_ln(f"if number not in {value_field_numbers}:")
         if removed_numbers:
             builder.append_ln(
-                f"  if number in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+                f"  if number in {removed_numbers_tuple} or not stream.keep_unrecognized_fields:"
             )
             builder.append_ln("    return ", unknown_constant_local)
         builder.append_ln("  bytes = stream.buffer[start_offset:stream.position]")
