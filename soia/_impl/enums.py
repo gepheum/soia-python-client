@@ -630,7 +630,6 @@ def _make_decode_fn(
     builder.append_ln("  try:")
     builder.append_ln("    return ", number_to_constant_local, "[number]")
     builder.append_ln("  except:")
-    builder.append_ln("    ", Expr.local("decode_unused", decode_unused), "(stream)")
     if removed_numbers:
         builder.append_ln(
             f"    if number in {removed_numbers_tuple} or not stream.keep_unrecognized_fields:"
@@ -671,6 +670,7 @@ def _make_decode_fn(
 
     if not value_fields:
         # The field was either removed or is an unrecognized field.
+        builder.append_ln(Expr.local("decode_unused", decode_unused), "(stream)")
         if removed_numbers:
             builder.append_ln(
                 f"if number in {removed_numbers_tuple} or not stream.keep_unrecognized_fields:"
@@ -680,6 +680,7 @@ def _make_decode_fn(
         builder.append_ln("return ", unrecognized_class_local, "(0, bytes)")
     else:
         builder.append_ln(f"if number not in {value_field_numbers}:")
+        builder.append_ln("  ", Expr.local("decode_unused", decode_unused), "(stream)")
         if removed_numbers:
             builder.append_ln(
                 f"  if number in {removed_numbers_tuple} or not stream.keep_unrecognized_fields:"
