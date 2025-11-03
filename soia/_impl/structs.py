@@ -953,7 +953,7 @@ def _make_decode_fn(
             "    ", Expr.local("decode_unused", decode_unused), "(stream)"
         )
     builder.append_ln("    start_offset = stream.position")
-    builder.append_ln("    for _ in range(array_len - {num_slots_incl_removed}):")
+    builder.append_ln(f"    for _ in range(array_len - {num_slots_incl_removed}):")
     builder.append_ln("      ", Expr.local("decode_unused", decode_unused), "(stream)")
     builder.append_ln("    end_offset = stream.position")
     builder.append_ln(
