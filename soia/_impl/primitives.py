@@ -1,4 +1,5 @@
 import base64
+import math
 import struct
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -210,6 +211,20 @@ INT64_ADAPTER: Final[TypeAdapter[int]] = _Int64Adapter()
 UINT64_ADAPTER: Final[TypeAdapter[int]] = _Uint64Adapter()
 
 
+_SPECIAL_FLOAT_TO_STRING: Final[dict[str, str]] = {
+    "nan": "NaN",
+    "inf": "Infinity",
+    "-inf": "-Infinity",
+}
+
+
+_STRING_TO_SPECIAL_FLOAT: Final[dict[str, float]] = {
+    "NaN": float("nan"),
+    "Infinity": float("inf"),
+    "-Infinity": float("-inf"),
+}
+
+
 @dataclass(frozen=True)
 class _AbstractFloatAdapter(AbstractPrimitiveAdapter[float]):
     """Type adapter implementation for float32 and float64."""
@@ -224,12 +239,40 @@ class _AbstractFloatAdapter(AbstractPrimitiveAdapter[float]):
         return arg_expr
 
     def to_json_expr(self, in_expr: ExprLike, readable: bool) -> ExprLike:
-        return in_expr
+        return Expr.join(
+            "(",
+            in_expr,
+            " if ",
+            Expr.local("_isfinite", math.isfinite),
+            "(",
+            in_expr,
+            ") else ",
+            Expr.local(
+                "_SPECIAL_FLOAT_TO_STRING",
+                _SPECIAL_FLOAT_TO_STRING,
+            ),
+            "[f'{",
+            in_expr,
+            "}'])",
+        )
 
     def from_json_expr(
         self, json_expr: ExprLike, keep_unrecognized_expr: ExprLike
     ) -> Expr:
-        return Expr.join("(", json_expr, " + 0.0)")
+        return Expr.join(
+            "(",
+            Expr.local(
+                "_STRING_TO_SPECIAL_FLOAT",
+                _STRING_TO_SPECIAL_FLOAT,
+            ),
+            "[",
+            json_expr,
+            "] if ",
+            json_expr,
+            " in ('NaN', 'Infinity', '-Infinity') else (",
+            json_expr,
+            " + 0.0))",
+        )
 
     def decode_fn(self) -> Callable[[ByteStream], float]:
         return decode_float

@@ -87,24 +87,24 @@ class SerializersTestCase(unittest.TestCase):
 
         self.assertEqual(primitive_serializer("float32").to_json_code(3.14), "3.14")
         self.assertEqual(
-            primitive_serializer("float32").to_json_code(float("inf")), "Infinity"
+            primitive_serializer("float32").to_json_code(float("inf")), '"Infinity"'
         )
         self.assertEqual(
-            primitive_serializer("float32").to_json_code(-float("inf")), "-Infinity"
+            primitive_serializer("float32").to_json_code(-float("inf")), '"-Infinity"'
         )
         self.assertEqual(
-            primitive_serializer("float32").to_json_code(float("nan")), "NaN"
+            primitive_serializer("float32").to_json_code(float("nan")), '"NaN"'
         )
         self.assertEqual(primitive_serializer("float32").from_json_code("3.14"), 3.14)
         self.assertEqual(
-            primitive_serializer("float32").from_json_code("Infinity"), float("inf")
+            primitive_serializer("float32").from_json_code('"Infinity"'), float("inf")
         )
         self.assertEqual(
-            primitive_serializer("float32").from_json_code("-Infinity"), -float("inf")
+            primitive_serializer("float32").from_json_code('"-Infinity"'), -float("inf")
         )
         self.assertNotEqual(
-            primitive_serializer("float32").from_json_code("NaN"),
-            primitive_serializer("float32").from_json_code("NaN"),
+            primitive_serializer("float32").from_json_code('"NaN"'),
+            primitive_serializer("float32").from_json_code('"NaN"'),
         )
 
         self.assertEqual(primitive_serializer("float64").to_json_code(3.14), "3.14")
