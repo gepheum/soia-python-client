@@ -197,7 +197,7 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
                 )
                 for field in self.value_fields
             ),
-            removed_fields=self.spec.removed_numbers,
+            removed_numbers=self.spec.removed_numbers,
         )
         for field in self.value_fields:
             field.field_type.register_records(registry)

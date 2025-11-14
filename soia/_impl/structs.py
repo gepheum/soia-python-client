@@ -294,7 +294,7 @@ class StructAdapter(Generic[T], TypeAdapter[T]):
                 )
                 for field in self.fields
             ),
-            removed_fields=self.spec.removed_numbers,
+            removed_numbers=self.spec.removed_numbers,
         )
         for field in self.fields:
             field.type.register_records(registry)

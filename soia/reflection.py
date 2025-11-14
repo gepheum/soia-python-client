@@ -66,7 +66,7 @@ class ArrayType:
     @dataclass(frozen=True)
     class Array:
         item: "Type"
-        key_chain: tuple[str, ...]
+        key_extractor: str
 
     value: Array
 
@@ -92,7 +92,7 @@ class Record:
     kind: Literal["struct", "enum"]
     id: str
     fields: tuple[Field, ...]
-    removed_fields: tuple[int, ...]
+    removed_numbers: tuple[int, ...]
 
 
 # ==============================================================================
@@ -283,9 +283,9 @@ _TYPE_SERIALIZER: Final = _union_serializer(
                                 _forwarding_serializer(_type_serializer),
                             ),
                             _FieldSerializer(
-                                "key_chain",
-                                _listuple_serializer(_primitive_serializer(str)),
-                                default=(),
+                                "key_extractor",
+                                _primitive_serializer(str),
+                                default="",
                             ),
                         ],
                     ),
@@ -345,7 +345,7 @@ _RECORD_SERIALIZER: Final = _dataclass_serializer(
             _listuple_serializer(_FIELD_SERIALIZER),
         ),
         _FieldSerializer(
-            "removed_fields",
+            "removed_numbers",
             _listuple_serializer(_primitive_serializer(int)),
             default=(),
         ),

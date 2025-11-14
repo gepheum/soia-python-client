@@ -159,11 +159,12 @@ class _ArrayAdapter(Generic[T], TypeAdapter[tuple[T, ...]]):
         self.item_adapter.finalize(resolve_type_fn)
 
     def get_type(self) -> reflection.Type:
+        key_extractor = ".".join(a.rstrip("_") for a in self.key_attributes)
         return reflection.ArrayType(
             kind="array",
             value=reflection.ArrayType.Array(
                 item=self.item_adapter.get_type(),
-                key_chain=self.key_attributes,
+                key_extractor=key_extractor,
             ),
         )
 
