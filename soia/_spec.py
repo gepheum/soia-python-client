@@ -75,8 +75,8 @@ class ConstantField:
 
 
 @dataclass(frozen=True)
-class ValueField:
-    """Value field of an enum."""
+class WrapperField:
+    """Wrapper field of an enum."""
 
     name: str
     number: int
@@ -87,7 +87,7 @@ class ValueField:
 class Enum:
     id: str
     constant_fields: tuple[ConstantField, ...] = ()
-    value_fields: tuple[ValueField, ...] = ()
+    wrapper_fields: tuple[WrapperField, ...] = ()
     removed_numbers: tuple[int, ...] = ()
     _class_name: str = ""  # If different from the record name
     _class_qualname: str = ""  # If different from the qualified name of the record

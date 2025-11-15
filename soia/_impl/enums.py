@@ -16,7 +16,7 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
         "gen_class",
         "private_is_enum_attr",
         "finalization_state",
-        "value_fields",
+        "wrapper_fields",
     )
 
     spec: Final[_spec.Enum]
@@ -24,7 +24,7 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
     private_is_enum_attr: Final[str]
     # 0: has not started; 1: in progress; 2: done
     finalization_state: int
-    value_fields: tuple["_ValueField", ...]
+    wrapper_fields: tuple["_WrapperField", ...]
 
     def __init__(self, spec: _spec.Enum):
         self.finalization_state = 0
@@ -62,10 +62,10 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
 
         base_class = self.gen_class
 
-        # Resolve the type of every value field.
-        self.value_fields = value_fields = tuple(
-            _make_value_field(f, resolve_type_fn(f.type), base_class)
-            for f in self.spec.value_fields
+        # Resolve the type of every wrapper field.
+        self.wrapper_fields = wrapper_fields = tuple(
+            _make_wrapper_field(f, resolve_type_fn(f.type), base_class)
+            for f in self.spec.wrapper_fields
         )
 
         # Aim to have dependencies finalized *before* the dependent. It's not always
@@ -73,32 +73,32 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
         # The function returned by the do_x_fn() method of a dependency is marginally
         # faster if the dependency is finalized. If the dependency is not finalized,
         # this function is a "forwarding" function.
-        for value_field in value_fields:
-            value_field.field_type.finalize(resolve_type_fn)
+        for wrapper_field in wrapper_fields:
+            wrapper_field.field_type.finalize(resolve_type_fn)
 
         # Add the wrap static factory methods.
-        for value_field in value_fields:
-            wrap_fn = _make_wrap_fn(value_field)
-            setattr(base_class, f"wrap_{value_field.spec.name}", wrap_fn)
+        for wrapper_field in wrapper_fields:
+            wrap_fn = _make_wrap_fn(wrapper_field)
+            setattr(base_class, f"wrap_{wrapper_field.spec.name}", wrap_fn)
             # Check if the field type is a struct type.
-            field_type = resolve_type_fn(value_field.spec.type)
+            field_type = resolve_type_fn(wrapper_field.spec.type)
             frozen_class = field_type.frozen_class_of_struct()
             if frozen_class:
                 create_fn = _make_create_fn(wrap_fn, frozen_class)
-                setattr(base_class, f"create_{value_field.spec.name}", create_fn)
+                setattr(base_class, f"create_{wrapper_field.spec.name}", create_fn)
 
         unrecognized_class = _make_unrecognized_class(base_class)
 
         base_class._fj = _make_from_json_fn(
             self.all_constant_fields,
-            value_fields,
+            wrapper_fields,
             set(self.spec.removed_numbers),
             base_class=base_class,
             unrecognized_class=unrecognized_class,
         )
         base_class._decode = _make_decode_fn(
             self.all_constant_fields,
-            value_fields,
+            wrapper_fields,
             set(self.spec.removed_numbers),
             base_class=base_class,
             unrecognized_class=unrecognized_class,
@@ -195,11 +195,11 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
                     number=field.spec.number,
                     type=field.field_type.get_type(),
                 )
-                for field in self.value_fields
+                for field in self.wrapper_fields
             ),
             removed_numbers=self.spec.removed_numbers,
         )
-        for field in self.value_fields:
+        for field in self.wrapper_fields:
             field.field_type.register_records(registry)
 
     def frozen_class_of_struct(self) -> type | None:
@@ -306,7 +306,7 @@ def _make_unrecognized_class(base_class: type) -> type:
 
 def _make_value_class(
     base_class: type,
-    field_spec: _spec.ValueField,
+    field_spec: _spec.WrapperField,
     field_type: TypeAdapter,
 ) -> type:
     number = field_spec.number
@@ -396,16 +396,16 @@ def _encode_impl(
 
 
 @dataclass(frozen=True)
-class _ValueField:
-    spec: _spec.ValueField
+class _WrapperField:
+    spec: _spec.WrapperField
     field_type: TypeAdapter
     value_class: type
 
 
-def _make_value_field(
-    spec: _spec.ValueField, field_type: TypeAdapter, base_class: type
-) -> _ValueField:
-    return _ValueField(
+def _make_wrapper_field(
+    spec: _spec.WrapperField, field_type: TypeAdapter, base_class: type
+) -> _WrapperField:
+    return _WrapperField(
         spec=spec,
         field_type=field_type,
         value_class=_make_value_class(
@@ -414,7 +414,7 @@ def _make_value_field(
     )
 
 
-def _make_wrap_fn(field: _ValueField) -> Callable[[Any], Any]:
+def _make_wrap_fn(field: _WrapperField) -> Callable[[Any], Any]:
     builder = BodyBuilder()
     builder.append_ln("ret = ", Expr.local("value_class", field.value_class), "()")
     builder.append_ln(
@@ -440,7 +440,7 @@ def _make_create_fn(wrap_fn: Callable[[Any], Any], frozen_class: type) -> Callab
 
 def _make_from_json_fn(
     constant_fields: Sequence[_spec.ConstantField],
-    value_fields: Sequence[_ValueField],
+    wrapper_fields: Sequence[_WrapperField],
     removed_numbers: set[int],
     base_class: type,
     unrecognized_class: type,
@@ -458,13 +458,13 @@ def _make_from_json_fn(
     unknown_constant = key_to_constant[0]
     unknown_constant_local = Expr.local("unknown_constant", unknown_constant)
 
-    number_to_value_field: dict[int, _ValueField] = {}
-    name_to_value_field: dict[str, _ValueField] = {}
-    for field in value_fields:
-        number_to_value_field[field.spec.number] = field
-        name_to_value_field[field.spec.name] = field
-    value_field_numbers = tuple(sorted(number_to_value_field.keys()))
-    value_field_names = tuple(sorted(name_to_value_field.keys()))
+    number_to_wrapper_field: dict[int, _WrapperField] = {}
+    name_to_wrapper_field: dict[str, _WrapperField] = {}
+    for field in wrapper_fields:
+        number_to_wrapper_field[field.spec.number] = field
+        name_to_wrapper_field[field.spec.name] = field
+    wrapper_field_numbers = tuple(sorted(number_to_wrapper_field.keys()))
+    wrapper_field_names = tuple(sorted(name_to_wrapper_field.keys()))
 
     builder = BodyBuilder()
     # The reason why we wrap the function inside a 'while' is explained below.
@@ -490,7 +490,7 @@ def _make_from_json_fn(
     def append_number_branches(numbers: Sequence[int], indent: str) -> None:
         if len(numbers) == 1:
             number = numbers[0]
-            field = number_to_value_field[number]
+            field = number_to_wrapper_field[number]
             value_class_local = Expr.local("cls?", field.value_class)
             value_expr = field.field_type.from_json_expr(
                 "json[1]", "keep_unrecognized_fields"
@@ -513,7 +513,7 @@ def _make_from_json_fn(
     # `json.__class__ is list` is significantly faster than `isinstance(json, list)`
     builder.append_ln("  elif json.__class__ is list:")
     builder.append_ln("    number = json[0]")
-    if not value_fields:
+    if not wrapper_fields:
         # The field was either removed or is an unrecognized field.
         if removed_numbers:
             builder.append_ln(
@@ -522,14 +522,14 @@ def _make_from_json_fn(
             builder.append_ln("      return ", unknown_constant_local)
         builder.append_ln("    return ", unrecognized_class_local, "(json, b'\\0')")
     else:
-        builder.append_ln(f"    if number not in {value_field_numbers}:")
+        builder.append_ln(f"    if number not in {wrapper_field_numbers}:")
         if removed_numbers:
             builder.append_ln(
                 f"      if number in {removed_numbers_tuple} or not keep_unrecognized_fields:"
             )
             builder.append_ln("        return ", unknown_constant_local)
         builder.append_ln("      return ", unrecognized_class_local, "(json, b'\\0')")
-        append_number_branches(value_field_numbers, "    ")
+        append_number_branches(wrapper_field_numbers, "    ")
 
     # READABLE FORMAT
     if len(constant_fields) == 1:
@@ -546,7 +546,7 @@ def _make_from_json_fn(
     def append_name_branches(names: Sequence[str], indent: str) -> None:
         if len(names) == 1:
             name = names[0]
-            field = name_to_value_field[name]
+            field = name_to_wrapper_field[name]
             value_class_local = Expr.local("cls?", field.value_class)
             value_expr = field.field_type.from_json_expr(
                 "json['value']", "keep_unrecognized_fields"
@@ -567,14 +567,14 @@ def _make_from_json_fn(
             append_name_branches(names[mid_index:], indented)
 
     builder.append_ln("  elif isinstance(json, dict):")
-    if not value_fields:
+    if not wrapper_fields:
         builder.append_ln("    return ", unknown_constant_local)
     else:
         builder.append_ln("    kind = json['kind']")
-        builder.append_ln(f"    if kind not in {value_field_names}:")
+        builder.append_ln(f"    if kind not in {wrapper_field_names}:")
         builder.append_ln("      return ", unknown_constant_local)
         builder.append_ln("    else:")
-        append_name_branches(value_field_names, "      ")
+        append_name_branches(wrapper_field_names, "      ")
 
     # In the unlikely event that json.loads() returns an instance of a subclass of int.
     builder.append_ln("  elif isinstance(json, int):")
@@ -593,7 +593,7 @@ def _make_from_json_fn(
 
 def _make_decode_fn(
     constant_fields: Sequence[_spec.ConstantField],
-    value_fields: Sequence[_ValueField],
+    wrapper_fields: Sequence[_WrapperField],
     removed_numbers: set[int],
     base_class: type,
     unrecognized_class: type,
@@ -610,10 +610,10 @@ def _make_decode_fn(
     unknown_constant = number_to_constant[0]
     unknown_constant_local = Expr.local("unknown_constant", unknown_constant)
 
-    number_to_value_field: dict[int, _ValueField] = {}
-    for field in value_fields:
-        number_to_value_field[field.spec.number] = field
-    value_field_numbers = tuple(sorted(number_to_value_field.keys()))
+    number_to_wrapper_field: dict[int, _WrapperField] = {}
+    for field in wrapper_fields:
+        number_to_wrapper_field[field.spec.number] = field
+    wrapper_field_numbers = tuple(sorted(number_to_wrapper_field.keys()))
 
     builder = BodyBuilder()
     builder.append_ln("start_offset = stream.position")
@@ -649,7 +649,7 @@ def _make_decode_fn(
     def append_number_branches(numbers: Sequence[int], indent: str) -> None:
         if len(numbers) == 1:
             number = numbers[0]
-            field = number_to_value_field[number]
+            field = number_to_wrapper_field[number]
             value_class_local = Expr.local("cls?", field.value_class)
             decode_local = Expr.local("decode?", field.field_type.decode_fn())
             value_expr = Expr.join(decode_local, "(stream)")
@@ -668,7 +668,7 @@ def _make_decode_fn(
             builder.append_ln(f"{indent}else:")
             append_number_branches(numbers[mid_index:], indented)
 
-    if not value_fields:
+    if not wrapper_fields:
         # The field was either removed or is an unrecognized field.
         builder.append_ln(Expr.local("decode_unused", decode_unused), "(stream)")
         if removed_numbers:
@@ -679,7 +679,7 @@ def _make_decode_fn(
         builder.append_ln("bytes = stream.buffer[start_offset:stream.position]")
         builder.append_ln("return ", unrecognized_class_local, "(0, bytes)")
     else:
-        builder.append_ln(f"if number not in {value_field_numbers}:")
+        builder.append_ln(f"if number not in {wrapper_field_numbers}:")
         builder.append_ln("  ", Expr.local("decode_unused", decode_unused), "(stream)")
         if removed_numbers:
             builder.append_ln(
@@ -688,7 +688,7 @@ def _make_decode_fn(
             builder.append_ln("    return ", unknown_constant_local)
         builder.append_ln("  bytes = stream.buffer[start_offset:stream.position]")
         builder.append_ln("  return ", unrecognized_class_local, "(0, bytes)")
-        append_number_branches(value_field_numbers, "")
+        append_number_branches(wrapper_field_numbers, "")
 
     return make_function(
         name="decode",

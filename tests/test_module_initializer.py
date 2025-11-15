@@ -149,8 +149,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
                             number=1,
                         ),
                     ),
-                    value_fields=(
-                        _spec.ValueField(
+                    wrapper_fields=(
+                        _spec.WrapperField(
                             name="error",
                             number=2,
                             type=_spec.PrimitiveType.STRING,
@@ -166,28 +166,28 @@ class ModuleInitializerTestCase(unittest.TestCase):
                             number=1,
                         ),
                     ),
-                    value_fields=(
-                        _spec.ValueField(
+                    wrapper_fields=(
+                        _spec.WrapperField(
                             name="bool",
                             number=2,
                             type=_spec.PrimitiveType.BOOL,
                         ),
-                        _spec.ValueField(
+                        _spec.WrapperField(
                             name="number",
                             number=3,
                             type=_spec.PrimitiveType.FLOAT64,
                         ),
-                        _spec.ValueField(
+                        _spec.WrapperField(
                             name="string",
                             number=4,
                             type=_spec.PrimitiveType.STRING,
                         ),
-                        _spec.ValueField(
+                        _spec.WrapperField(
                             name="array",
                             number=5,
                             type=_spec.ArrayType("my/module.soia:JsonValue"),
                         ),
-                        _spec.ValueField(
+                        _spec.WrapperField(
                             name="object",
                             number=6,
                             type="my/module.soia:JsonValue.Object",
@@ -1891,11 +1891,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
     def test_enum_binary_format_value_fields(self):
-        """Test binary encoding for enum value fields."""
+        """Test binary encoding for enum wrapper fields."""
         module = self.init_test_module()
         Status = module["Status"]
 
-        # Test binary encoding for value field
+        # Test binary encoding for wrapper field
         error_status = Status.wrap_error("test error")
         error_bytes = Status.SERIALIZER.to_bytes(error_status)
         self.assertTrue(error_bytes.hex().startswith("736f6961"))  # soia prefix
@@ -1920,7 +1920,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
             self.assertEqual(restored, status)
 
     def test_enum_binary_roundtrip_value_fields(self):
-        """Test binary roundtrip for enum value fields."""
+        """Test binary roundtrip for enum wrapper fields."""
         module = self.init_test_module()
         Status = module["Status"]
 
@@ -2021,7 +2021,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(restored.value.entries[2].value.value, False)
 
     def test_enum_binary_array_values(self):
-        """Test binary serialization of enum with array value fields."""
+        """Test binary serialization of enum with array wrapper fields."""
         module = self.init_test_module()
         JsonValue = module["JsonValue"]
 
