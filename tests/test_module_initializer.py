@@ -419,7 +419,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
     def test_primitives_to_json(self):
         primitives_cls = self.init_test_module()["Primitives"]
-        serializer = primitives_cls.SERIALIZER
+        serializer = primitives_cls.serializer
         p = primitives_cls(
             bool=True,
             bytes=b"a",
@@ -435,7 +435,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
     def test_primitives_from_json(self):
         primitives_cls = self.init_test_module()["Primitives"]
-        serializer = primitives_cls.SERIALIZER
+        serializer = primitives_cls.serializer
         json = [0] * 100
         self.assertEqual(serializer.from_json(json), primitives_cls.DEFAULT)
         self.assertEqual(
@@ -473,7 +473,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
     def test_from_json_converts_between_ints_and_floats(self):
         primitives_cls = self.init_test_module()["Primitives"]
-        serializer = primitives_cls.SERIALIZER
+        serializer = primitives_cls.serializer
         p = serializer.from_json([0, 0, 3])
         self.assertEqual(p.f32, 3.0)
         self.assertIsInstance(p.f32, float)
@@ -493,7 +493,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
     def test_point_to_dense_json(self):
         point_cls = self.init_test_module()["Point"]
-        serializer = point_cls.SERIALIZER
+        serializer = point_cls.serializer
         point = point_cls(x=1.5, y=2.5)
         self.assertEqual(serializer.to_json(point), [1.5, 0, 2.5])
         self.assertEqual(serializer.to_json(point, readable=False), [1.5, 0, 2.5])
@@ -504,14 +504,14 @@ class ModuleInitializerTestCase(unittest.TestCase):
     def test_point_to_readable_json(self):
         point_cls = self.init_test_module()["Point"]
         point = point_cls(x=1.5, y=2.5)
-        json = point_cls.SERIALIZER.to_json(point, readable=True)
+        json = point_cls.serializer.to_json(point, readable=True)
         self.assertEqual(json, {"x": 1.5, "y": 2.5})
-        json_code = point_cls.SERIALIZER.to_json_code(point, readable=True)
+        json_code = point_cls.serializer.to_json_code(point, readable=True)
         self.assertEqual(json_code, '{\n  "x": 1.5,\n  "y": 2.5\n}')
 
     def test_point_from_dense_json(self):
         point_cls = self.init_test_module()["Point"]
-        serializer = point_cls.SERIALIZER
+        serializer = point_cls.serializer
         self.assertEqual(serializer.from_json([1.5, 0, 2.5]), point_cls(x=1.5, y=2.5))
         self.assertEqual(serializer.from_json([1.5]), point_cls(x=1.5, y=0.0))
         self.assertEqual(serializer.from_json([0.0]), point_cls.DEFAULT)
@@ -519,20 +519,20 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
     def test_point_from_readable_json(self):
         point_cls = self.init_test_module()["Point"]
-        point = point_cls.SERIALIZER.from_json({"x": 1.5, "y": 2.5})
+        point = point_cls.serializer.from_json({"x": 1.5, "y": 2.5})
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
-        point = point_cls.SERIALIZER.from_json_code('{"x":1.5,"y":2.5}')
+        point = point_cls.serializer.from_json_code('{"x":1.5,"y":2.5}')
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
-        point = point_cls.SERIALIZER.from_json_code('{"x":1.5,"y":2.5,"z":[]}')
+        point = point_cls.serializer.from_json_code('{"x":1.5,"y":2.5,"z":[]}')
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
-        point = point_cls.SERIALIZER.from_json_code('{"x":1,"y":2}')
+        point = point_cls.serializer.from_json_code('{"x":1,"y":2}')
         self.assertEqual(point.x, 1.0)
         self.assertIsInstance(point.x, float)
         self.assertEqual(point._array_len, 3)
 
     def test_point_with_keep_unrecognized_fields(self):
         point_cls = self.init_test_module()["Point"]
-        serializer = point_cls.SERIALIZER
+        serializer = point_cls.serializer
         point = serializer.from_json([1.5, 1, 2.5, True], keep_unrecognized_fields=True)
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
         self.assertEqual(serializer.to_json(point), [1.5, 0, 2.5, True])
@@ -541,7 +541,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
     def test_point_with_drop_unrecognized_fields(self):
         point_cls = self.init_test_module()["Point"]
-        serializer = point_cls.SERIALIZER
+        serializer = point_cls.serializer
         point = serializer.from_json([1.5, 1, 2.5, True])
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
         self.assertEqual(serializer.to_json(point), [1.5, 0, 2.5])
@@ -552,7 +552,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         test_module = self.init_test_module()
         foobar_cls = test_module["Foobar"]
         point_cls = test_module["Point"]
-        serializer = foobar_cls.SERIALIZER
+        serializer = foobar_cls.serializer
         foobar = foobar_cls.partial()
         self.assertEqual(serializer.to_json_code(foobar), "[]")
         self.assertEqual(serializer.from_json_code("[]"), foobar)
@@ -571,7 +571,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
     def test_recursive_struct(self):
         rec_cls = self.init_test_module()["Rec"]
         r = rec_cls.partial(r=rec_cls(r=rec_cls.DEFAULT, x=1))
-        serializer = rec_cls.SERIALIZER
+        serializer = rec_cls.serializer
         self.assertEqual(serializer.to_json_code(r), "[[[],1]]")
         self.assertEqual(serializer.from_json_code("[[[],1]]"), r)
         self.assertEqual(
@@ -704,7 +704,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(unknown.kind, "?")
         self.assertEqual(unknown.value, None)
         self.assertIs(unknown.union, unknown)
-        serializer = primary_color_cls.SERIALIZER
+        serializer = primary_color_cls.serializer
         self.assertEqual(serializer.to_json(unknown), 0)
         self.assertEqual(serializer.to_json(unknown, readable=True), "?")
         self.assertFalse(bool(unknown))
@@ -717,7 +717,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(red.kind, "RED")
         self.assertEqual(red.value, None)
         self.assertIs(red.union, red)
-        serializer = primary_color_cls.SERIALIZER
+        serializer = primary_color_cls.serializer
         self.assertEqual(serializer.to_json(red), 10)
         self.assertEqual(serializer.to_json(red, readable=True), "RED")
 
@@ -728,7 +728,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(error.kind, "error")
         self.assertEqual(error.value, "An error occurred")
         self.assertIs(error.union, error)
-        serializer = status_cls.SERIALIZER
+        serializer = status_cls.serializer
         self.assertEqual(serializer.to_json(error), [2, "An error occurred"])
         self.assertEqual(
             serializer.to_json(error, readable=True),
@@ -779,7 +779,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
     def test_enum_to_json(self):
         module = self.init_test_module()
         status_cls = module["Status"]
-        serializer = status_cls.SERIALIZER
+        serializer = status_cls.serializer
         self.assertEqual(serializer.to_json(status_cls.UNKNOWN), 0)
         self.assertEqual(serializer.to_json(status_cls.UNKNOWN, readable=True), "?")
         self.assertEqual(serializer.to_json(status_cls.OK), 1)
@@ -794,7 +794,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
     def test_enum_from_json(self):
         module = self.init_test_module()
         status_cls = module["Status"]
-        serializer = status_cls.SERIALIZER
+        serializer = status_cls.serializer
         self.assertEqual(serializer.from_json(0), status_cls.UNKNOWN)
         self.assertEqual(serializer.from_json("?"), status_cls.UNKNOWN)
         self.assertEqual(serializer.from_json(1), status_cls.OK)
@@ -808,7 +808,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
     def test_complex_enum_from_json(self):
         module = self.init_test_module()
         json_value_cls = module["JsonValue"]
-        serializer = json_value_cls.SERIALIZER
+        serializer = json_value_cls.serializer
         json_value = serializer.from_json(
             [
                 5,
@@ -877,7 +877,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
     def test_enum_with_keep_unrecognized_fields(self):
         json_value_cls = self.init_test_module()["JsonValue"]
-        serializer = json_value_cls.SERIALIZER
+        serializer = json_value_cls.serializer
         json_value = serializer.from_json(100, keep_unrecognized_fields=True)  # removed
         self.assertEqual(json_value, json_value_cls.UNKNOWN)
         self.assertEqual(serializer.to_json(json_value), 0)
@@ -899,7 +899,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
     def test_enum_with_drop_unrecognized_fields(self):
         json_value_cls = self.init_test_module()["JsonValue"]
-        serializer = json_value_cls.SERIALIZER
+        serializer = json_value_cls.serializer
         json_value = serializer.from_json(100)  # removed
         self.assertEqual(json_value, json_value_cls.UNKNOWN)
         self.assertEqual(serializer.to_json(json_value), 0)
@@ -1142,7 +1142,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIs(entries.find("bar"), entries[3])
         self.assertIs(entries.find_or_default("foo"), entries[0])
         self.assertIs(entries.find_or_default("zoo"), entry_cls.DEFAULT)
-        serializer = json_value_cls.Object.SERIALIZER
+        serializer = json_value_cls.Object.serializer
         json_object = serializer.from_json_code("0")
         entries = json_object.entries
         self.assertIsInstance(entries, KeyedItems)
@@ -1222,8 +1222,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
             Method(
                 name="FirstMethod",
                 number=-300,
-                request_serializer=module["Point"].SERIALIZER,
-                response_serializer=module["Shape"].SERIALIZER,
+                request_serializer=module["Point"].serializer,
+                response_serializer=module["Shape"].serializer,
             ),
         )
         second_method = module["MethodVar"]
@@ -1232,8 +1232,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
             Method(
                 name="SecondMethod",
                 number=-301,
-                request_serializer=module["Point"].SERIALIZER,
-                response_serializer=module["Shape"].SERIALIZER,
+                request_serializer=module["Point"].serializer,
+                response_serializer=module["Shape"].serializer,
             ),
         )
 
@@ -1246,7 +1246,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
     def test_enum_type_descriptor(self):
         module = self.init_test_module()
         json_value_cls = module["JsonValue"]
-        type_descriptor = json_value_cls.SERIALIZER.type_descriptor
+        type_descriptor = json_value_cls.serializer.type_descriptor
         self.assertEqual(
             type_descriptor.as_json(),
             {
@@ -1353,7 +1353,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
     def test_optional_type_descriptor(self):
         module = self.init_test_module()
         segment_cls = module["Segment"]
-        type_descriptor = segment_cls.SERIALIZER.type_descriptor
+        type_descriptor = segment_cls.serializer.type_descriptor
         self.assertEqual(
             type_descriptor.as_json(),
             {
@@ -1424,7 +1424,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
     def test_primitive_type_descriptor(self):
         module = self.init_test_module()
         segment_cls = module["Primitives"]
-        type_descriptor = segment_cls.SERIALIZER.type_descriptor
+        type_descriptor = segment_cls.serializer.type_descriptor
         self.assertEqual(
             type_descriptor.as_json(),
             {
@@ -1500,11 +1500,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Empty struct should encode to wire 246 (0 fields)
         empty_point = Point.partial()
-        empty_bytes = Point.SERIALIZER.to_bytes(empty_point)
+        empty_bytes = Point.serializer.to_bytes(empty_point)
         self.assertEqual(empty_bytes.hex(), "736f6961f6")  # soia + 246
 
         # Test roundtrip
-        restored = Point.SERIALIZER.from_bytes(empty_bytes)
+        restored = Point.serializer.from_bytes(empty_bytes)
         self.assertEqual(restored, empty_point)
         self.assertIs(restored, Point.DEFAULT)
 
@@ -1515,20 +1515,20 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # One field (wire 247)
         one_field = Point.partial(x=1.0)
-        one_bytes = Point.SERIALIZER.to_bytes(one_field)
+        one_bytes = Point.serializer.to_bytes(one_field)
         self.assertTrue(one_bytes.hex().startswith("736f6961f7"))  # soia + 247
-        restored_one = Point.SERIALIZER.from_bytes(one_bytes)
+        restored_one = Point.serializer.from_bytes(one_bytes)
         self.assertEqual(restored_one.x, 1.0)
         self.assertEqual(restored_one.y, 0.0)
 
         # Two fields (wire 248)
         two_fields = Point(x=1.0, y=2.0)
-        two_bytes = Point.SERIALIZER.to_bytes(two_fields)
+        two_bytes = Point.serializer.to_bytes(two_fields)
         self.assertEqual(two_fields._array_len, 3)
         self.assertTrue(
             two_bytes, b"soia\xf9\xf0\x00\x00\x80?\x00\xf0\x00\x00\x00@"
         )  # soia + 249
-        restored_two = Point.SERIALIZER.from_bytes(two_bytes)
+        restored_two = Point.serializer.from_bytes(two_bytes)
         self.assertEqual(restored_two._array_len, 3)
         self.assertEqual(restored_two.x, 1.0)
         self.assertEqual(restored_two.y, 2.0)
@@ -1550,11 +1550,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
             s="hello",
             t=Timestamp.from_unix_millis(1000),
         )
-        full_bytes = Primitives.SERIALIZER.to_bytes(full_struct)
+        full_bytes = Primitives.serializer.to_bytes(full_struct)
         self.assertTrue(full_bytes.hex().startswith("736f6961fa"))  # soia + 250
 
         # Test roundtrip
-        restored = Primitives.SERIALIZER.from_bytes(full_bytes)
+        restored = Primitives.serializer.from_bytes(full_bytes)
         self.assertEqual(restored.bool, True)
         self.assertEqual(restored.bytes, b"test")
         self.assertAlmostEqual(restored.f32, 4.5, places=5)
@@ -1574,8 +1574,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Test with optional field set to None
         seg_with_none = Segment(a=Point(x=1.0, y=2.0), b=Point(x=3.0, y=4.0), c=None)
-        bytes_none = Segment.SERIALIZER.to_bytes(seg_with_none)
-        restored_none = Segment.SERIALIZER.from_bytes(bytes_none)
+        bytes_none = Segment.serializer.to_bytes(seg_with_none)
+        restored_none = Segment.serializer.from_bytes(bytes_none)
         self.assertEqual(restored_none.a.x, 1.0)
         self.assertEqual(restored_none.a.y, 2.0)
         self.assertEqual(restored_none.b.x, 3.0)
@@ -1587,8 +1587,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
         seg_with_value = Segment(
             a=Point(x=1.0, y=2.0), b=Point(x=3.0, y=4.0), c=Point(x=5.0, y=6.0)
         )
-        bytes_value = Segment.SERIALIZER.to_bytes(seg_with_value)
-        restored_value = Segment.SERIALIZER.from_bytes(bytes_value)
+        bytes_value = Segment.serializer.to_bytes(seg_with_value)
+        restored_value = Segment.serializer.from_bytes(bytes_value)
         self.assertEqual(restored_value.a.x, 1.0)
         self.assertEqual(restored_value.a.y, 2.0)
         self.assertEqual(restored_value.b.x, 3.0)
@@ -1609,8 +1609,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
         # Binary roundtrip
-        binary_bytes = Segment.SERIALIZER.to_bytes(segment)
-        restored = Segment.SERIALIZER.from_bytes(binary_bytes)
+        binary_bytes = Segment.serializer.to_bytes(segment)
+        restored = Segment.serializer.from_bytes(binary_bytes)
 
         self.assertEqual(restored.a.x, 10.0)
         self.assertEqual(restored.a.y, 20.0)
@@ -1629,14 +1629,14 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Test with empty array
         empty_shape = Shape(points=())
-        empty_bytes = Shape.SERIALIZER.to_bytes(empty_shape)
-        restored_empty = Shape.SERIALIZER.from_bytes(empty_bytes)
+        empty_bytes = Shape.serializer.to_bytes(empty_shape)
+        restored_empty = Shape.serializer.from_bytes(empty_bytes)
         self.assertEqual(len(restored_empty.points), 0)
 
         # Test with small array (1-3 elements)
         small_shape = Shape(points=(Point(x=1.0, y=2.0), Point(x=3.0, y=4.0)))
-        small_bytes = Shape.SERIALIZER.to_bytes(small_shape)
-        restored_small = Shape.SERIALIZER.from_bytes(small_bytes)
+        small_bytes = Shape.serializer.to_bytes(small_shape)
+        restored_small = Shape.serializer.from_bytes(small_bytes)
         self.assertEqual(len(restored_small.points), 2)
         self.assertEqual(restored_small.points[0].x, 1.0)
         self.assertEqual(restored_small.points[0].y, 2.0)
@@ -1653,8 +1653,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 Point(x=9.0, y=10.0),
             )
         )
-        large_bytes = Shape.SERIALIZER.to_bytes(large_shape)
-        restored_large = Shape.SERIALIZER.from_bytes(large_bytes)
+        large_bytes = Shape.serializer.to_bytes(large_shape)
+        restored_large = Shape.serializer.from_bytes(large_bytes)
         self.assertEqual(len(restored_large.points), 5)
         for i, point in enumerate(restored_large.points):
             self.assertEqual(point.x, float(i * 2 + 1))
@@ -1667,12 +1667,12 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # All defaults
         default_struct = Primitives.DEFAULT
-        default_bytes = Primitives.SERIALIZER.to_bytes(default_struct)
+        default_bytes = Primitives.serializer.to_bytes(default_struct)
 
         # Should encode as empty struct (wire 246)
         self.assertTrue(default_bytes.hex().startswith("736f6961f6"))
 
-        restored = Primitives.SERIALIZER.from_bytes(default_bytes)
+        restored = Primitives.serializer.from_bytes(default_bytes)
         self.assertEqual(restored.bool, False)
         self.assertEqual(restored.bytes, b"")
         self.assertEqual(restored.f32, 0.0)
@@ -1702,8 +1702,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
             t=Timestamp.from_unix_millis(0),  # default
         )
 
-        partial_bytes = Primitives.SERIALIZER.to_bytes(partial_struct)
-        restored = Primitives.SERIALIZER.from_bytes(partial_bytes)
+        partial_bytes = Primitives.serializer.to_bytes(partial_struct)
+        restored = Primitives.serializer.from_bytes(partial_bytes)
 
         self.assertEqual(restored.bool, False)
         self.assertEqual(restored.bytes, b"")
@@ -1734,8 +1734,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
             t=Timestamp.from_unix_millis(-8640000000000000),  # min timestamp
         )
 
-        edge_bytes = Primitives.SERIALIZER.to_bytes(edge_struct)
-        restored = Primitives.SERIALIZER.from_bytes(edge_bytes)
+        edge_bytes = Primitives.serializer.to_bytes(edge_struct)
+        restored = Primitives.serializer.from_bytes(edge_bytes)
 
         self.assertEqual(restored.bool, True)
         self.assertEqual(restored.bytes, b"\x00\xff")
@@ -1765,8 +1765,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
         # Binary roundtrip
-        binary_bytes = Shape.SERIALIZER.to_bytes(complex_shape)
-        restored = Shape.SERIALIZER.from_bytes(binary_bytes)
+        binary_bytes = Shape.serializer.to_bytes(complex_shape)
+        restored = Shape.serializer.from_bytes(binary_bytes)
 
         self.assertEqual(restored, complex_shape)
         expected_coords = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]
@@ -1784,8 +1784,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Do multiple roundtrips
         for _ in range(5):
-            binary_bytes = Point.SERIALIZER.to_bytes(current)
-            current = Point.SERIALIZER.from_bytes(binary_bytes)
+            binary_bytes = Point.serializer.to_bytes(current)
+            current = Point.serializer.from_bytes(binary_bytes)
 
         # Should still be equal (within floating point precision)
         self.assertAlmostEqual(current.x, original.x, places=5)
@@ -1799,15 +1799,15 @@ class ModuleInitializerTestCase(unittest.TestCase):
         empty = Point.DEFAULT
         with_defaults = Point(x=0.0, y=0.0)
 
-        empty_bytes = Point.SERIALIZER.to_bytes(empty)
-        defaults_bytes = Point.SERIALIZER.to_bytes(with_defaults)
+        empty_bytes = Point.serializer.to_bytes(empty)
+        defaults_bytes = Point.serializer.to_bytes(with_defaults)
 
         # Both should produce identical binary output
         self.assertEqual(empty_bytes, defaults_bytes)
 
         # Both should roundtrip to equivalent objects
-        restored_empty = Point.SERIALIZER.from_bytes(empty_bytes)
-        restored_defaults = Point.SERIALIZER.from_bytes(defaults_bytes)
+        restored_empty = Point.serializer.from_bytes(empty_bytes)
+        restored_defaults = Point.serializer.from_bytes(defaults_bytes)
 
         self.assertEqual(restored_empty, restored_defaults)
         self.assertEqual(restored_empty.x, 0.0)
@@ -1819,25 +1819,25 @@ class ModuleInitializerTestCase(unittest.TestCase):
         Point = module["Point"]
 
         # Create a point with unrecognized fields via JSON
-        point_from_json = Point.SERIALIZER.from_json(
+        point_from_json = Point.serializer.from_json(
             [1.5, 0, 2.5, 100], keep_unrecognized_fields=True
         )
         # This point has unrecognized field at index 3
-        self.assertEqual(Point.SERIALIZER.to_json(point_from_json), [1.5, 0, 2.5, 100])
+        self.assertEqual(Point.serializer.to_json(point_from_json), [1.5, 0, 2.5, 100])
 
         # Now convert to binary and back WITHOUT keep_unrecognized_fields
-        binary_bytes = Point.SERIALIZER.to_bytes(point_from_json)
-        restored_drop = Point.SERIALIZER.from_bytes(binary_bytes)  # default is False
+        binary_bytes = Point.serializer.to_bytes(point_from_json)
+        restored_drop = Point.serializer.from_bytes(binary_bytes)  # default is False
 
         # The unrecognized field should be dropped
         self.assertEqual(restored_drop.x, 1.5)
         self.assertEqual(restored_drop.y, 2.5)
         # Verify it round-trips through JSON WITHOUT the unrecognized field
-        self.assertEqual(Point.SERIALIZER.to_json(restored_drop), [1.5, 0, 2.5])
+        self.assertEqual(Point.serializer.to_json(restored_drop), [1.5, 0, 2.5])
 
         # Test that mutable roundtrip also drops unrecognized fields
         mutable = restored_drop.to_mutable().to_frozen()
-        self.assertEqual(Point.SERIALIZER.to_json(mutable), [1.5, 0, 2.5])
+        self.assertEqual(Point.serializer.to_json(mutable), [1.5, 0, 2.5])
 
     def test_struct_binary_format_with_removed_fields_drop_unrecognized(self):
         """Test binary format drops removed field data when keep_unrecognized_fields=False."""
@@ -1846,13 +1846,13 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Foobar has removed_numbers=(0, 2)
         # Create from JSON with data in removed field positions
-        foobar_from_json = Foobar.SERIALIZER.from_json(
+        foobar_from_json = Foobar.serializer.from_json(
             [5, 10, 15, 20, [1.0]], keep_unrecognized_fields=True
         )
 
         # Convert to binary and back WITHOUT keep_unrecognized_fields
-        binary_bytes = Foobar.SERIALIZER.to_bytes(foobar_from_json)
-        restored = Foobar.SERIALIZER.from_bytes(binary_bytes)  # default drops
+        binary_bytes = Foobar.serializer.to_bytes(foobar_from_json)
+        restored = Foobar.serializer.from_bytes(binary_bytes)  # default drops
 
         # Verify the recognized fields are correct
         self.assertEqual(restored.a, 10)
@@ -1860,7 +1860,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(restored.point.x, 1.0)
 
         # Verify unrecognized/removed fields are dropped through JSON
-        restored_json = Foobar.SERIALIZER.to_json(restored)
+        restored_json = Foobar.serializer.to_json(restored)
         # Should only have recognized fields, removed fields should be 0
         self.assertEqual(restored_json, [0, 10, 0, 20, [1.0]])
 
@@ -1870,24 +1870,24 @@ class ModuleInitializerTestCase(unittest.TestCase):
         PrimaryColor = module["PrimaryColor"]
 
         # Test binary encoding for constant fields
-        red_bytes = PrimaryColor.SERIALIZER.to_bytes(PrimaryColor.RED)
+        red_bytes = PrimaryColor.serializer.to_bytes(PrimaryColor.RED)
         self.assertEqual(red_bytes, b"soia\n")
 
-        green_bytes = PrimaryColor.SERIALIZER.to_bytes(PrimaryColor.GREEN)
+        green_bytes = PrimaryColor.serializer.to_bytes(PrimaryColor.GREEN)
         self.assertTrue(green_bytes, b"soia\x02")
 
-        blue_bytes = PrimaryColor.SERIALIZER.to_bytes(PrimaryColor.BLUE)
+        blue_bytes = PrimaryColor.serializer.to_bytes(PrimaryColor.BLUE)
         self.assertEqual(blue_bytes, b"soia\x1e")
 
         # Test binary roundtrips
         self.assertEqual(
-            PrimaryColor.SERIALIZER.from_bytes(red_bytes), PrimaryColor.RED
+            PrimaryColor.serializer.from_bytes(red_bytes), PrimaryColor.RED
         )
         self.assertEqual(
-            PrimaryColor.SERIALIZER.from_bytes(green_bytes), PrimaryColor.GREEN
+            PrimaryColor.serializer.from_bytes(green_bytes), PrimaryColor.GREEN
         )
         self.assertEqual(
-            PrimaryColor.SERIALIZER.from_bytes(blue_bytes), PrimaryColor.BLUE
+            PrimaryColor.serializer.from_bytes(blue_bytes), PrimaryColor.BLUE
         )
 
     def test_enum_binary_format_value_fields(self):
@@ -1897,11 +1897,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Test binary encoding for wrapper field
         error_status = Status.wrap_error("test error")
-        error_bytes = Status.SERIALIZER.to_bytes(error_status)
+        error_bytes = Status.serializer.to_bytes(error_status)
         self.assertTrue(error_bytes.hex().startswith("736f6961"))  # soia prefix
 
         # Test binary roundtrip
-        restored = Status.SERIALIZER.from_bytes(error_bytes)
+        restored = Status.serializer.from_bytes(error_bytes)
         self.assertEqual(restored.kind, "error")
         self.assertEqual(restored.value, "test error")
         self.assertEqual(restored, error_status)
@@ -1915,8 +1915,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         for status in constant_values:
             # Test binary roundtrip
-            binary_bytes = Status.SERIALIZER.to_bytes(status)
-            restored = Status.SERIALIZER.from_bytes(binary_bytes)
+            binary_bytes = Status.serializer.to_bytes(status)
+            restored = Status.serializer.from_bytes(binary_bytes)
             self.assertEqual(restored, status)
 
     def test_enum_binary_roundtrip_value_fields(self):
@@ -1934,8 +1934,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         for error_msg in test_cases:
             error_status = Status.wrap_error(error_msg)
-            binary_bytes = Status.SERIALIZER.to_bytes(error_status)
-            restored = Status.SERIALIZER.from_bytes(binary_bytes)
+            binary_bytes = Status.serializer.to_bytes(error_status)
+            restored = Status.serializer.from_bytes(binary_bytes)
 
             self.assertEqual(restored.kind, "error")
             self.assertEqual(restored.value, error_msg)
@@ -1948,11 +1948,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Test unknown constant
         unknown = PrimaryColor.UNKNOWN
-        unknown_bytes = PrimaryColor.SERIALIZER.to_bytes(unknown)
+        unknown_bytes = PrimaryColor.serializer.to_bytes(unknown)
         self.assertTrue(unknown_bytes.hex().startswith("736f6961"))
 
         # Roundtrip should return UNKNOWN
-        restored = PrimaryColor.SERIALIZER.from_bytes(unknown_bytes)
+        restored = PrimaryColor.serializer.from_bytes(unknown_bytes)
         self.assertEqual(restored.kind, "?")
         self.assertEqual(restored, PrimaryColor.UNKNOWN)
 
@@ -1963,29 +1963,29 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Test with string value
         string_val = JsonValue.wrap_string("hello world")
-        string_bytes = JsonValue.SERIALIZER.to_bytes(string_val)
-        restored_string = JsonValue.SERIALIZER.from_bytes(string_bytes)
+        string_bytes = JsonValue.serializer.to_bytes(string_val)
+        restored_string = JsonValue.serializer.from_bytes(string_bytes)
         self.assertEqual(restored_string.kind, "string")
         self.assertEqual(restored_string.value, "hello world")
 
         # Test with number value
         number_val = JsonValue.wrap_number(3.14159)
-        number_bytes = JsonValue.SERIALIZER.to_bytes(number_val)
-        restored_number = JsonValue.SERIALIZER.from_bytes(number_bytes)
+        number_bytes = JsonValue.serializer.to_bytes(number_val)
+        restored_number = JsonValue.serializer.from_bytes(number_bytes)
         self.assertEqual(restored_number.kind, "number")
         self.assertAlmostEqual(restored_number.value, 3.14159, places=10)
 
         # Test with bool value
         bool_val = JsonValue.wrap_bool(True)
-        bool_bytes = JsonValue.SERIALIZER.to_bytes(bool_val)
-        restored_bool = JsonValue.SERIALIZER.from_bytes(bool_bytes)
+        bool_bytes = JsonValue.serializer.to_bytes(bool_val)
+        restored_bool = JsonValue.serializer.from_bytes(bool_bytes)
         self.assertEqual(restored_bool.kind, "bool")
         self.assertEqual(restored_bool.value, True)
 
         # Test with NULL constant
         null_val = JsonValue.NULL
-        null_bytes = JsonValue.SERIALIZER.to_bytes(null_val)
-        restored_null = JsonValue.SERIALIZER.from_bytes(null_bytes)
+        null_bytes = JsonValue.serializer.to_bytes(null_val)
+        restored_null = JsonValue.serializer.from_bytes(null_bytes)
         self.assertEqual(restored_null.kind, "NULL")
         self.assertEqual(restored_null, JsonValue.NULL)
 
@@ -2005,8 +2005,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
         # Binary roundtrip
-        obj_bytes = JsonValue.SERIALIZER.to_bytes(obj)
-        restored = JsonValue.SERIALIZER.from_bytes(obj_bytes)
+        obj_bytes = JsonValue.serializer.to_bytes(obj)
+        restored = JsonValue.serializer.from_bytes(obj_bytes)
 
         self.assertEqual(restored.kind, "object")
         self.assertEqual(len(restored.value.entries), 3)
@@ -2027,8 +2027,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Test with empty array
         empty_array = JsonValue.wrap_array([])
-        empty_bytes = JsonValue.SERIALIZER.to_bytes(empty_array)
-        restored_empty = JsonValue.SERIALIZER.from_bytes(empty_bytes)
+        empty_bytes = JsonValue.serializer.to_bytes(empty_array)
+        restored_empty = JsonValue.serializer.from_bytes(empty_bytes)
         self.assertEqual(restored_empty.kind, "array")
         self.assertEqual(len(restored_empty.value), 0)
 
@@ -2041,8 +2041,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 JsonValue.wrap_string("test"),
             ]
         )
-        mixed_bytes = JsonValue.SERIALIZER.to_bytes(mixed_array)
-        restored_mixed = JsonValue.SERIALIZER.from_bytes(mixed_bytes)
+        mixed_bytes = JsonValue.serializer.to_bytes(mixed_array)
+        restored_mixed = JsonValue.serializer.from_bytes(mixed_bytes)
         self.assertEqual(restored_mixed.kind, "array")
         self.assertEqual(len(restored_mixed.value), 4)
         self.assertEqual(restored_mixed.value[0], JsonValue.NULL)
@@ -2063,8 +2063,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
         middle_array = JsonValue.wrap_array([inner_array])
         outer_array = JsonValue.wrap_array([middle_array])
 
-        outer_bytes = JsonValue.SERIALIZER.to_bytes(outer_array)
-        restored = JsonValue.SERIALIZER.from_bytes(outer_bytes)
+        outer_bytes = JsonValue.serializer.to_bytes(outer_array)
+        restored = JsonValue.serializer.from_bytes(outer_bytes)
 
         self.assertEqual(restored.kind, "array")
         self.assertEqual(len(restored.value), 1)
@@ -2083,8 +2083,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Do multiple roundtrips
         for _ in range(5):
-            binary_bytes = Status.SERIALIZER.to_bytes(current)
-            current = Status.SERIALIZER.from_bytes(binary_bytes)
+            binary_bytes = Status.serializer.to_bytes(current)
+            current = Status.serializer.from_bytes(binary_bytes)
 
         # Should still be equal
         self.assertEqual(current.kind, original.kind)
@@ -2104,8 +2104,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
         ]
 
         for color, expected_number in test_cases:
-            binary_bytes = PrimaryColor.SERIALIZER.to_bytes(color)
-            restored = PrimaryColor.SERIALIZER.from_bytes(binary_bytes)
+            binary_bytes = PrimaryColor.serializer.to_bytes(color)
+            restored = PrimaryColor.serializer.from_bytes(binary_bytes)
             self.assertEqual(restored, color)
 
     def test_enum_binary_consistency_across_formats(self):
@@ -2117,15 +2117,15 @@ class ModuleInitializerTestCase(unittest.TestCase):
         status1 = Status.wrap_error("test")
         status2 = Status.wrap_error("test")
 
-        bytes1 = Status.SERIALIZER.to_bytes(status1)
-        bytes2 = Status.SERIALIZER.to_bytes(status2)
+        bytes1 = Status.serializer.to_bytes(status1)
+        bytes2 = Status.serializer.to_bytes(status2)
 
         # Should produce identical binary output
         self.assertEqual(bytes1, bytes2)
 
         # Both should restore to equivalent values
-        restored1 = Status.SERIALIZER.from_bytes(bytes1)
-        restored2 = Status.SERIALIZER.from_bytes(bytes2)
+        restored1 = Status.serializer.from_bytes(bytes1)
+        restored2 = Status.serializer.from_bytes(bytes2)
         self.assertEqual(restored1, restored2)
 
     def test_enum_binary_edge_case_values(self):
@@ -2136,31 +2136,31 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Test with empty string
         empty_error = Status.wrap_error("")
-        empty_bytes = Status.SERIALIZER.to_bytes(empty_error)
-        restored_empty = Status.SERIALIZER.from_bytes(empty_bytes)
+        empty_bytes = Status.serializer.to_bytes(empty_error)
+        restored_empty = Status.serializer.from_bytes(empty_bytes)
         self.assertEqual(restored_empty.value, "")
 
         # Test with very long string
         long_error = Status.wrap_error("x" * 10000)
-        long_bytes = Status.SERIALIZER.to_bytes(long_error)
-        restored_long = Status.SERIALIZER.from_bytes(long_bytes)
+        long_bytes = Status.serializer.to_bytes(long_error)
+        restored_long = Status.serializer.from_bytes(long_bytes)
         self.assertEqual(restored_long.value, "x" * 10000)
 
         # Test with special unicode characters
         unicode_error = Status.wrap_error("\u0000\uffff\U0001f600")
-        unicode_bytes = Status.SERIALIZER.to_bytes(unicode_error)
-        restored_unicode = Status.SERIALIZER.from_bytes(unicode_bytes)
+        unicode_bytes = Status.serializer.to_bytes(unicode_error)
+        restored_unicode = Status.serializer.from_bytes(unicode_bytes)
         self.assertEqual(restored_unicode.value, "\u0000\uffff\U0001f600")
 
         # Test with extreme float values
         inf_val = JsonValue.wrap_number(float("inf"))
-        inf_bytes = JsonValue.SERIALIZER.to_bytes(inf_val)
-        restored_inf = JsonValue.SERIALIZER.from_bytes(inf_bytes)
+        inf_bytes = JsonValue.serializer.to_bytes(inf_val)
+        restored_inf = JsonValue.serializer.from_bytes(inf_bytes)
         self.assertEqual(restored_inf.value, float("inf"))
 
         neg_inf_val = JsonValue.wrap_number(float("-inf"))
-        neg_inf_bytes = JsonValue.SERIALIZER.to_bytes(neg_inf_val)
-        restored_neg_inf = JsonValue.SERIALIZER.from_bytes(neg_inf_bytes)
+        neg_inf_bytes = JsonValue.serializer.to_bytes(neg_inf_val)
+        restored_neg_inf = JsonValue.serializer.from_bytes(neg_inf_bytes)
         self.assertEqual(restored_neg_inf.value, float("-inf"))
 
     def test_enum_binary_mixed_enum_and_struct(self):
@@ -2192,8 +2192,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
         )
 
         # Binary roundtrip
-        complex_bytes = JsonValue.SERIALIZER.to_bytes(complex_obj)
-        restored = JsonValue.SERIALIZER.from_bytes(complex_bytes)
+        complex_bytes = JsonValue.serializer.to_bytes(complex_obj)
+        restored = JsonValue.serializer.from_bytes(complex_bytes)
 
         self.assertEqual(restored.kind, "object")
         self.assertEqual(len(restored.value.entries), 1)

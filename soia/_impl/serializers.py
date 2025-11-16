@@ -60,10 +60,10 @@ def primitive_serializer(
     | Serializer[str]
     | Serializer[bytes]
 ):
-    return _PRIMITIVE_TO_SERIALIZER[primitive]
+    return _primitive_to_serializer[primitive]
 
 
-_PRIMITIVE_TO_SERIALIZER: Final = {
+_primitive_to_serializer: Final = {
     "bool": make_serializer(primitives.BOOL_ADAPTER),
     "int32": make_serializer(primitives.INT32_ADAPTER),
     "int64": make_serializer(primitives.INT64_ADAPTER),

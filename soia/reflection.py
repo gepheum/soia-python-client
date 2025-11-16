@@ -23,18 +23,18 @@ class TypeDescriptor:
     records: tuple["Record", ...]
 
     def as_json(self) -> Any:
-        return _TYPE_DESCRIPTOR_SERIALIZER.to_json(self)
+        return _type_descriptor_serializer.to_json(self)
 
     def as_json_code(self) -> str:
         return json.dumps(self.as_json(), indent=2)
 
     @staticmethod
     def from_json(json: Any) -> "TypeDescriptor":
-        return _TYPE_DESCRIPTOR_SERIALIZER.from_json(json)
+        return _type_descriptor_serializer.from_json(json)
 
     @staticmethod
     def from_json_code(json_code: str) -> "TypeDescriptor":
-        return _TYPE_DESCRIPTOR_SERIALIZER.from_json(json.loads(json_code))
+        return _type_descriptor_serializer.from_json(json.loads(json_code))
 
 
 @dataclass(frozen=True)
@@ -225,11 +225,11 @@ def _optional_serializer(
 # ==============================================================================
 
 
-def _type_serializer() -> _Serializer[Type]:
-    return _TYPE_SERIALIZER
+def _get_type_serializer() -> _Serializer[Type]:
+    return _type_serializer
 
 
-_TYPE_SERIALIZER: Final = _union_serializer(
+_type_serializer: Final[_Serializer[Type]] = _union_serializer(
     {
         "primitive": _dataclass_serializer(
             PrimitiveType,
@@ -262,7 +262,7 @@ _TYPE_SERIALIZER: Final = _union_serializer(
                 ),
                 _FieldSerializer(
                     "value",
-                    _forwarding_serializer(_type_serializer),
+                    _forwarding_serializer(_get_type_serializer),
                 ),
             ],
         ),
@@ -280,7 +280,7 @@ _TYPE_SERIALIZER: Final = _union_serializer(
                         [
                             _FieldSerializer(
                                 "item",
-                                _forwarding_serializer(_type_serializer),
+                                _forwarding_serializer(_get_type_serializer),
                             ),
                             _FieldSerializer(
                                 "key_extractor",
@@ -309,7 +309,7 @@ _TYPE_SERIALIZER: Final = _union_serializer(
 )
 
 
-_FIELD_SERIALIZER: Final = _dataclass_serializer(
+_field_serializer: Final = _dataclass_serializer(
     Field,
     [
         _FieldSerializer(
@@ -322,14 +322,14 @@ _FIELD_SERIALIZER: Final = _dataclass_serializer(
         ),
         _FieldSerializer[Optional[Type]](
             "type",
-            _optional_serializer(_forwarding_serializer(_type_serializer)),
+            _optional_serializer(_forwarding_serializer(_get_type_serializer)),
             default=None,
         ),
     ],
 )
 
 
-_RECORD_SERIALIZER: Final = _dataclass_serializer(
+_record_serializer: Final = _dataclass_serializer(
     Record,
     [
         _FieldSerializer(
@@ -342,7 +342,7 @@ _RECORD_SERIALIZER: Final = _dataclass_serializer(
         ),
         _FieldSerializer(
             "fields",
-            _listuple_serializer(_FIELD_SERIALIZER),
+            _listuple_serializer(_field_serializer),
         ),
         _FieldSerializer(
             "removed_numbers",
@@ -353,16 +353,16 @@ _RECORD_SERIALIZER: Final = _dataclass_serializer(
 )
 
 
-_TYPE_DESCRIPTOR_SERIALIZER = _dataclass_serializer(
+_type_descriptor_serializer = _dataclass_serializer(
     TypeDescriptor,
     [
         _FieldSerializer(
             "type",
-            _TYPE_SERIALIZER,
+            _type_serializer,
         ),
         _FieldSerializer(
             "records",
-            _listuple_serializer(_RECORD_SERIALIZER),
+            _listuple_serializer(_record_serializer),
         ),
     ],
 )
