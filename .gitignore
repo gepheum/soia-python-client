@@ -1,6 +1,5 @@
 __pycache__
 .DS_Store
-.playground
 dist
 *.egg-info
 *.pyc

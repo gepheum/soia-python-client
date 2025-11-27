@@ -112,10 +112,10 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
         tuple[Any, _MethodImpl[Request, Response, RequestHeaders, ResponseHeaders]],
         RawServiceResponse,
     ]:
-        if self.req_body in ["", "list"]:
+        if self.req_body in ("", "list"):
             return self._handle_list()
 
-        if self.req_body == "restudio":
+        if self.req_body in ("debug", "restudio"):
             return self._handle_restudio()
 
         # Method invokation
